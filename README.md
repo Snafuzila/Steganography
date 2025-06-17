@@ -15,7 +15,7 @@
 - Konin Daniel  
 - Chayut Dor  
 - Attiya Boaz  
-- Lamai Ofek  
+- Lamay Ofek  
 
 ## 👨‍🏫 Instructor
 **Zimon Roi**
