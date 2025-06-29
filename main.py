@@ -1,4 +1,4 @@
-from encrypt import encrypt_message
+from encrypt import encrypt_message //AES256
 from decrypt import decrypt_message
 
 if __name__ == "__main__":
