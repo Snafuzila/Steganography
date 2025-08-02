@@ -2,7 +2,7 @@ from encrypt import encrypt_message #AES256
 from decrypt import decrypt_message
 from PIL import Image
 from lsb_img import lsb_img_hide_text_with_length
-from lsb_img_extract_text_with_length import lsb_img_extract_text_from_image
+from lsb_img import lsb_img_extract_text_from_image
 '''
 
 def main():
