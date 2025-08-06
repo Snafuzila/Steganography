@@ -1,0 +1,35 @@
+def main():
+    print("=== Steganography Menu ===")
+    print("בחר פורמט:")
+    print("1. תמונה")
+    print("2. וידאו")
+    print("3. אודיו")
+    print("4. טקסט (Whitespace)")
+    choice = input("הכנס מספר: ")
+
+    if choice not in ["1", "2", "3", "4"]:
+        print("בחירה לא חוקית")
+        return
+
+    print("\nבחר פעולה:")
+    print("1. הסתרה (Encode)")
+    print("2. גילוי (Decode)")
+    action = input("הכנס מספר: ")
+
+    if action not in ["1", "2"]:
+        print("בחירה לא חוקית")
+        return
+
+    input_file = input("\nשם קובץ מקור: ")
+    output_file = input("שם קובץ יעד: ")
+
+    if action == "1":
+        message = input("הקלד את ההודעה שתרצה להסתיר: ")
+        print(f"\n[+] מסתיר הודעה ב-{input_file} ושומר ב-{output_file}")
+        # כאן תקרא לפונקציה של דור/בעז/רון בהתאם לפורמט
+    else:
+        print(f"\n[+] מגלה הודעה מ-{input_file}")
+        # כאן תקרא לפונקציה של גילוי הודעה
+
+if __name__ == "__main__":
+    main()
