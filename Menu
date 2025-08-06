@@ -1,6 +1,3 @@
-import cv2
-import numpy as np
-import os
 
 def main():
     print("=== Steganography Menu ===")
@@ -30,7 +27,7 @@ def main():
     if action == "1":
         message = input("הקלד את ההודעה שתרצה להסתיר: ")
         print(f"\n[+] מסתיר הודעה ב-{input_file} ושומר ב-{output_file}")
-        # כאן תקרא לפונקציה של דור/בעז/רון בהתאם לפורמט
+        # כאן תקרא לפונקציה בהתאם לפורמט
     else:
         print(f"\n[+] מגלה הודעה מ-{input_file}")
         # כאן תקרא לפונקציה של גילוי הודעה
