@@ -1,8 +1,10 @@
+# main.py
 from encrypt import encrypt_message #AES256
 from decrypt import decrypt_message
 from PIL import Image
-from lsb_img import lsb_img_hide_text_with_length
-from lsb_img import lsb_img_extract_text_from_image
+from lsb_img import lsb_img_hide_text_with_length, lsb_img_extract_text_from_image
+
+
 '''
 
 def main():
@@ -36,6 +38,7 @@ def main():
 if __name__ == '__main__':
     main()
 '''
+'''
 if __name__ == "__main__":
     password = input("Enter password: ")
     msg = input("Enter message to encrypt: ")
@@ -45,3 +48,4 @@ if __name__ == "__main__":
 
     decrypted = decrypt_message(password, encrypted)
     print(f"Decrypted: {decrypted}")
+'''
