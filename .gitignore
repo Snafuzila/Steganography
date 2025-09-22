@@ -48,3 +48,8 @@ Pipfile.lock
 
 # Ignore encryption password inputs (if stored temporarily)
 password.txt
+
+# Ignore Python cache
+__pycache__/
+
+סטגנוגרפיה/
