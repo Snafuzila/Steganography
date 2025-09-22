@@ -1,3 +1,4 @@
+#lsb_img.py
 from PIL import Image  # Pillow library to handle images
 
 # Converts a string message into a binary string
