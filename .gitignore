@@ -22,7 +22,7 @@ venv/
 *.bak
 
 # Output or test files
-output/
+outputs/
 *.bmp
 *.png
 *.wav
