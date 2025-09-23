@@ -1,22 +1,55 @@
-# Ignore Python cache
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# Virtual env
-.venv/
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Environment and dependency folders
 env/
 venv/
+.venv/
 
-# OS files
+# MacOS system files
 .DS_Store
-Thumbs.db
 
-# IDE settings
+# VSCode settings (optional)
 .vscode/
-.idea/
 
-# Ignore your temporary folder
-Ignoreable/
+# Logs and dumps
+*.log
+*.bak
 
-#ffmpeg livrary files
-ffmpeg/
+# Output or test files
+output/
+*.bmp
+*.png
+*.wav
+*.flac
+*.avi
+*.mkv
+*.pdf
+*.docx
+
+# Encrypted or embedded files (if you're generating them)
+*.enc
+*.secret
+*.steg
+
+# Secrets (important!)
+*.key
+*.pem
+*.cert
+*.der
+
+# Python virtualenv file
+Pipfile.lock
+
+# Ignore encryption password inputs (if stored temporarily)
+password.txt
+
+# Ignore Python cache
+__pycache__/
+
+סטגנוגרפיה/

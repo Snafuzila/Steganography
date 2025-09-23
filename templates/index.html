@@ -1,174 +1,162 @@
 <!doctype html>
 <html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>StegX - Steganography UI</title>
-	<style>
-		body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
-		.container { max-width: 900px; margin: 0 auto; }
-		.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-		.card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
-		.row { display: flex; gap: 1rem; align-items: center; }
-		label { font-weight: 600; }
-		select, input, button, textarea { width: 100%; padding: .6rem; border: 1px solid #ccc; border-radius: 6px; }
-		button { cursor: pointer; background: #0d6efd; color: white; border: none; }
-		.hidden { display: none; }
-		.footer { margin-top: 2rem; color: #666; font-size: .9rem; }
-	</style>
-</head>
-<body>
-	<div class="container">
-		<h1>StegX – Steganography</h1>
-		<p>Select algorithm, action, and format. Upload a file and set options.</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steganography UI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Steganography Toolkit</h1>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-container">
+            {% for category, msg in messages %}
+              <div class="flash {{ category }}">{{ msg }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
-		<div class="card">
-			<div class="grid">
-				<div>
-					<label for="algorithm">Algorithm</label>
-					<select id="algorithm">
-						<option value="lsb">LSB (Image)</option>
-						<option value="whitespace">Whitespace (TXT/HTML/CSS)</option>
-						<option value="video">Audio-in-Video</option>
-					</select>
-				</div>
-				<div>
-					<label for="action">Action</label>
-					<select id="action">
-						<option value="encode">Encode (Hide)</option>
-						<option value="decode">Decode (Reveal)</option>
-					</select>
-				</div>
-			</div>
+      <div class="grid">
+        <section class="card">
+          <h2>Encode</h2>
+          <form action="{{ url_for('encode') }}" method="post" enctype="multipart/form-data">
+            <div class="field">
+              <label>Choose file type</label>
+              <select name="file_type" id="file_type" required>
+                <option value="" disabled selected>Select type…</option>
+                {% for t in allowed_types %}
+                  <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+              <p class="hint">Supported: txt, css, html, mov, mkv, avi, png, bmp, wav</p>
+            </div>
 
-			<div class="grid" style="margin-top:1rem;">
-				<div id="format-group">
-					<label for="format">Format</label>
-					<select id="format">
-						<option value="image">Image (PNG/JPG/BMP)</option>
-						<option value="text">Text (TXT/HTML/CSS)</option>
-						<option value="video">Video (MKV/AVI/MP4)</option>
-					</select>
-				</div>
-				<div id="password-group" class="hidden">
-					<label for="password">Password (Whitespace)</label>
-					<input type="password" id="password" placeholder="Enter password for AES" />
-				</div>
-			</div>
+            <div id="video_params" class="video-params" style="display:none;">
+              <div class="field">
+                <label>Frame duration (seconds)</label>
+                <input type="text" name="frame_duration" placeholder="0.1" />
+              </div>
+              <div class="field">
+                <label>Compare fraction (0-1)</label>
+                <input type="text" name="compare_fraction" placeholder="0.5" />
+              </div>
+              <div class="field">
+                <label>Header bits</label>
+                <input type="text" name="header_bits" placeholder="1010101010101010" />
+              </div>
+              <div class="field">
+                <label>Footer bits</label>
+                <input type="text" name="footer_bits" placeholder="0101010101010101" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input type="password" name="password" placeholder="Enter password" required />
+            </div>
+            <div class="field">
+              <label>Message to hide</label>
+              <textarea name="message" placeholder="Type your secret message" rows="4" required></textarea>
+            </div>
+            <div class="field">
+              <label>Upload file</label>
+              <input type="file" name="upload_file" required />
+            </div>
+            <div class="actions">
+              <button type="submit">Encode</button>
+            </div>
+          </form>
+        </section>
 
-			<div class="grid" style="margin-top:1rem;">
-				<div id="message-group">
-					<label for="message">Message</label>
-					<textarea id="message" rows="3" placeholder="Enter the secret text to hide"></textarea>
-				</div>
-				<div id="video-params" class="hidden">
-					<label>Video Decode Parameters</label>
-					<div class="row" style="margin-top:.5rem;">
-						<input id="frame_duration" type="number" step="0.01" value="0.1" placeholder="Frame duration (s)">
-						<input id="compare_fraction" type="number" step="0.1" value="0.5" placeholder="Compare fraction (0-1)">
-					</div>
-				</div>
-			</div>
+        <section class="card">
+          <h2>Decode</h2>
+          <form action="{{ url_for('decode') }}" method="post" enctype="multipart/form-data">
+            <div class="field">
+              <label>Choose file type</label>
+              <select name="decode_file_type" id="decode_file_type" required>
+                <option value="" disabled selected>Select type…</option>
+                {% for t in allowed_types %}
+                  <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div id="decode_video_params" class="video-params" style="display:none;">
+              <div class="field">
+                <label>Frame duration (seconds)</label>
+                <input type="text" name="decode_frame_duration" placeholder="0.1" />
+              </div>
+              <div class="field">
+                <label>Compare fraction (0-1)</label>
+                <input type="text" name="decode_compare_fraction" placeholder="0.5" />
+              </div>
+              <div class="field">
+                <label>Header bits</label>
+                <input type="text" name="decode_header_bits" placeholder="1010101010101010" />
+              </div>
+              <div class="field">
+                <label>Footer bits</label>
+                <input type="text" name="decode_footer_bits" placeholder="0101010101010101" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input type="password" name="decode_password" placeholder="Enter password (for text types)" />
+            </div>
+            <div class="field">
+              <label>Upload file</label>
+              <input type="file" name="decode_upload_file" required />
+            </div>
+            <div class="actions">
+              <button type="submit">Decode</button>
+            </div>
+          </form>
+        </section>
+      </div>
 
-			<div style="margin-top:1rem;">
-				<label for="file">File</label>
-				<input id="file" type="file" />
-			</div>
+      <!-- No listing of example or uploaded files -->
+    </div>
+  </body>
+  <script>
+    const typeSelect = document.getElementById('file_type');
+    const params = document.getElementById('video_params');
+    function toggleParams() {
+      const v = (typeSelect?.value || '').toLowerCase();
+      if (v === 'avi' || v === 'mkv' || v === 'mov') {
+        params.style.display = '';
+      } else {
+        params.style.display = 'none';
+      }
+    }
+    typeSelect?.addEventListener('change', toggleParams);
+    toggleParams();
 
-			<div class="row" style="margin-top:1rem;">
-				<button id="submit">Run</button>
-				<a id="download" class="hidden">Download result</a>
-			</div>
+    const dTypeSelect = document.getElementById('decode_file_type');
+    const dParams = document.getElementById('decode_video_params');
+    function dToggleParams() {
+      const v = (dTypeSelect?.value || '').toLowerCase();
+      if (v === 'avi' || v === 'mkv' || v === 'mov') {
+        dParams.style.display = '';
+      } else {
+        dParams.style.display = 'none';
+      }
+    }
+    dTypeSelect?.addEventListener('change', dToggleParams);
+    dToggleParams();
 
-			<pre id="output" style="white-space:pre-wrap; margin-top:1rem;"></pre>
-		</div>
+    // Auto-start download after redirect if server provided a file
+    const urlParams = new URLSearchParams(window.location.search);
+    const dl = urlParams.get('download');
+    if (dl) {
+      const link = document.createElement('a');
+      link.href = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/download/${encodeURIComponent(dl)}`;
+      link.download = dl;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+  </script>
+  </html>
 
-		<div class="footer">UI is English-only. Requires ffmpeg installed for video features.</div>
-	</div>
 
-	<script>
-	function updateVisibility() {
-		const algo = document.getElementById('algorithm').value;
-		const action = document.getElementById('action').value;
-		document.getElementById('format-group').classList.add('hidden');
-		document.getElementById('password-group').classList.toggle('hidden', !(algo === 'whitespace'));
-		document.getElementById('message-group').classList.toggle('hidden', action !== 'encode');
-		document.getElementById('video-params').classList.toggle('hidden', !(algo === 'video' && action === 'decode'));
-	}
-	['algorithm','action'].forEach(id => document.getElementById(id).addEventListener('change', updateVisibility));
-	updateVisibility();
-
-	async function run() {
-		const algo = document.getElementById('algorithm').value;
-		const action = document.getElementById('action').value;
-		const file = document.getElementById('file').files[0];
-		const msg = document.getElementById('message').value;
-		const pw = document.getElementById('password').value;
-		const frame_duration = document.getElementById('frame_duration').value;
-		const compare_fraction = document.getElementById('compare_fraction').value;
-		const output = document.getElementById('output');
-		const download = document.getElementById('download');
-		output.textContent = '';
-		download.classList.add('hidden');
-
-		let url = '';
-		const fd = new FormData();
-		if (!file) { output.textContent = 'Please select a file.'; return; }
-		fd.append('file', file);
-
-		if (algo === 'lsb') {
-			if (action === 'encode') { url = '/encode/lsb-image'; fd.append('message', msg); }
-			else { url = '/decode/lsb-image'; }
-		} else if (algo === 'whitespace') {
-			if (action === 'encode') { url = '/encode/whitespace'; fd.append('message', msg); fd.append('password', pw); }
-			else { url = '/decode/whitespace'; fd.append('password', pw); }
-		} else if (algo === 'video') {
-			if (action === 'encode') { url = '/encode/video-audio'; if (msg) fd.append('message', msg); }
-			else { url = '/decode/video-audio'; fd.append('frame_duration', frame_duration); fd.append('compare_fraction', compare_fraction); }
-		}
-
-		const res = await fetch(url, { method: 'POST', body: fd });
-		const ct = res.headers.get('Content-Type') || '';
-		const cd = res.headers.get('Content-Disposition') || '';
-		const isAttachment = /attachment/i.test(cd);
-
-		// For decode, prefer showing text on screen unless server forces attachment
-		if (action === 'decode' && !isAttachment) {
-			try {
-				if (ct.includes('application/json')) {
-					const data = await res.json();
-					output.textContent = data.message || JSON.stringify(data);
-				} else if (ct.startsWith('text/')) {
-					const text = await res.text();
-					output.textContent = text;
-				} else {
-					// Fallback: attempt to read as text
-					const text = await res.text();
-					output.textContent = text || 'No message found.';
-				}
-			} catch (e) {
-				output.textContent = 'Failed to decode response.';
-			}
-			return;
-		}
-
-		// For encode or explicit attachments, offer download
-		if (ct.includes('application/octet-stream') || ct.includes('image/') || ct.startsWith('text/') || isAttachment) {
-			const blob = await res.blob();
-			const urlObj = URL.createObjectURL(blob);
-			download.href = urlObj;
-			download.download = file.name.replace(/(\.[^.]+)?$/, '_stego$1');
-			download.textContent = 'Download result';
-			download.classList.remove('hidden');
-			output.textContent = 'File generated.';
-		} else if (ct.includes('application/json')) {
-			const data = await res.json();
-			output.textContent = data.message || JSON.stringify(data);
-		} else {
-			output.textContent = 'Unexpected response.';
-		}
-	}
-	document.getElementById('submit').addEventListener('click', run);
-	</script>
-</body>
-</html>
