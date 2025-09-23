@@ -17,3 +17,6 @@ Thumbs.db
 
 # Ignore your temporary folder
 Ignoreable/
+
+#ffmpeg livrary files
+ffmpeg/
