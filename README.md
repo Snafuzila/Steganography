@@ -1,153 +1,84 @@
-# Audio Steganography with AES‑256 Encryption
+# 🧠 Initial Project Specification Document
 
-This repository implements a complete end‑to‑end project for hiding
-arbitrary text inside uncompressed audio.  It was written as a
-hands‑on demonstration for a university course on information
-security.  The goal is to showcase how secret messages can be hidden
-in plain sight, while still enjoying the confidentiality of modern
-cryptography.
+---
 
-## How it works
+## 📌 Project Name
+**StegX – A Steganography System for Encryption and Information Concealment**
 
-**Least Significant Bit substitution.**  Digital audio stored in a
-WAV file consists of a sequence of samples.  In a mono, 16‑bit WAV
-file each sample is represented by two bytes.  To hide a message we
-modify only the lower byte of each sample (one out of every two
-bytes); this byte carries the least significant bits of the sample
-value and small changes there are inaudible【51454510526638†L650-L706】.  Our
-implementation replaces one to three of those least significant bits
-with bits from the secret message.  Using more bits increases
-capacity but also slightly degrades the signal.
+## 📚 Course Name
+**Steganography Project – Holon Institute of Technology - 2025, Semester B**
 
-Before embedding, the message is transformed into a bitstream.  We
-first encrypt the plaintext using a password (see below), then prefix
-the encrypted payload with its length as a 32‑bit big‑endian integer.
-The full byte sequence is converted to bits and written into the
-audio sample bytes.  On extraction the first 32 bits are read to
-recover the length and the subsequent bits are reassembled into the
-encrypted payload.  This length prefix allows the decoder to know
-exactly when the message ends, avoiding the stray characters that
-appear if you simply read until the end of the file【51454510526638†L650-L706】.
+---
 
-**AES‑256 encryption.**  Hiding information without encryption is
-dangerous because anyone who discovers the hidden bits can read your
-message.  To prevent this, the plaintext is encrypted using
-password‑based AES‑256 before it is embedded.  Best practices for
-password‑based encryption require a random salt and a strong key
-derivation function.  In the reference implementation from Lane
-Wagner’s AES‑256 tutorial, a random salt is generated and the
-password is stretched into a 256‑bit key using the Scrypt KDF
-【132564739309937†L74-L92】.  Salts ensure that the same password yields a
-different key every time, thwarting precomputed rainbow table
-attacks【132564739309937†L96-L106】.  While the tutorial uses the
-PyCryptodome library, our project achieves the same result by
-invoking the OpenSSL command line tool with the `-pbkdf2` option.
-OpenSSL automatically derives the key from the password, prepends the
-salt to the ciphertext and applies AES‑256‑CBC encryption.  The
-ciphertext is then Base64‑encoded so that it can be stored as ASCII
-text【132564739309937†L74-L92】.  During decoding, the encrypted data is fed
-back into OpenSSL along with the same password; the tool reads the
-salt, derives the key and verifies the message integrity.
+## 👥 Team Members
+- Noiman Ron  
+- Konin Daniel  
+- Chayut Dor  
+- Attiya Boaz  
+- Lamay Ofek  
 
-## Project layout
+## 👨‍🏫 Instructor
+**Zimon Roi**
 
-```
-stego_project/
-├── crypto_utils.py  # wrappers around OpenSSL for AES‑256 encryption/decryption
-├── stego_core.py    # bitwise embedding/extraction and high‑level encode/decode functions
-├── main.py          # command‑line interface
-└── README.md        # this file
-```
+---
 
-### crypto_utils.py
+## 1. 🧾 General Background
 
-Provides two functions, `encrypt_message` and `decrypt_message`, that
-invoke the OpenSSL `enc` command with the `-aes-256-cbc`, `-salt` and
-`-pbkdf2` flags.  The former takes a plaintext string and returns a
-Base64 ciphertext.  The latter takes the Base64 bytes and a password
-and returns the original plaintext.  Errors from OpenSSL are
-propagated as Python exceptions.
+The need for privacy, confidentiality, and secure information transmission has become more prevalent in the digital age.  
+This project involves developing a system that implements **steganography principles** — concealing information inside digital files in a way that is invisible to the eye.
 
-### stego_core.py
+The system will allow users to **embed files or text** into various formats such as images, audio files, videos, and documents — using dedicated hiding algorithms, **without visibly altering the file**.
 
-Defines helper functions to convert between bytes and bits, embed
-bits into audio frames and extract them.  The two high‑level
-functions are:
+Additionally, the project includes developing a **user-friendly interface** and the ability to **extract hidden information**, with **optional encryption** and basic content protection.
 
-- **encode_message(audio_path, message_text, output_path, n_lsb=1)**:
-  Reads `audio_path`, prompts for a password, encrypts the message
-  (either a literal string or the contents of a text file), prepends
-  its length and embeds the resulting bitstream into the least
-  significant bits of the audio samples.  Only mono 16‑bit WAV files
-  are supported.
-- **decode_message(stego_audio_path, n_lsb=1, save_to_file=True)**:
-  Extracts the bitstream from a stego WAV, recovers the encrypted
-  payload length and data, prompts for the password and decrypts the
-  message.  By default the recovered plaintext is also saved to
-  `<stego_audio_basename>_decoded.txt`.
+---
 
-### main.py
+## 2. 🎯 Objectives and Goals
 
-Implements a simple command‑line interface using `argparse`.  It
-supports two subcommands: `encode` for embedding messages and
-`decode` for extraction.  Use `--help` on either subcommand to see the
-available options.
+### 🎯 **Project Objective**
+Build a complete steganographic system that enables **transparent data hiding** (text, files) in various formats, while **preserving the integrity** of the outer file.
 
-## Usage
+### ✅ **Main Goals**
+- Develop dedicated algorithms for **data hiding and extraction**
+- Support the following formats: `PNG`, `BMP`, `WAV`, `FLAC`, `AVI`, `MKV`, `PDF`, `DOCX`
+- Build an **internal encryption mechanism (AES-256)** to maintain confidentiality
+- Develop a **user-friendly interface** (initially CLI, potentially GUI later)
+- Document all code and algorithms clearly
+- Perform **tests and experiments** using various file types
 
-Ensure that you have Python 3 and OpenSSL installed on your system.
+---
 
-1. Place a mono 16‑bit WAV file in the working directory and note its
-   filename (e.g. `input.wav`).
-2. Install any dependencies (none besides OpenSSL).  This project
-   avoids the need for extra Python packages by calling OpenSSL
-   directly.
-3. Run the encoder.  For example, to hide the Hebrew phrase "סוד
-   סודי ביותר" using 2 LSBs and save the result as `output.wav`:
+## 3. 🧪 Technological Overview
 
-   ```bash
-   python main.py encode -i input.wav -o output.wav -m "סוד סודי ביותר" -n 2
-   ```
+### 🐍 **Programming Language**
+- **Python** – Chosen for its strong support in digital file processing, encryption, UI frameworks, and vast library ecosystem.
 
-   You will be prompted to enter a password; use the same password
-   later to decode.
+### 📚 **Relevant Libraries (selected or under consideration)**
+- `Pillow` – Image file processing  
+- `PyDub`, `wave` – Audio file handling  
+- `PyCryptodome` – Encryption  
+- `PyMuPDF`, `python-docx` – Document (PDF, DOCX) handling  
+- `Tkinter` or `PyQt` – GUI interface (if GUI development is selected)
 
-4. Decode the message:
+### 📂 **Supported Formats**
+- **Images:** PNG, BMP  
+- **Audio:** WAV, FLAC  
+- **Video:** AVI, MKV  
+- **Text/Documents:** PDF, DOCX
 
-   ```bash
-   python main.py decode -i output.wav -n 2
-   ```
+### 🧠 **Selected Algorithms**
+- **LSB (Least Significant Bit):** For embedding in images, video, and audio  
+- **Whitespace Steganography:** For hiding text in document formats  
+- **Echo Hiding:** For embedding messages in audio files  
+- **DSS (Direct-Sequence Spread Spectrum):** Hiding information in audio and video signals
 
-   Enter the password when prompted.  The recovered message will be
-   printed to the console and, unless you specify `--no-save`, will
-   also be written to `output_decoded.txt`.
+---
 
-## Notes and limitations
+## 🔮 Future Implementation Recommendations
+- Share code and logic between handling `WAV` and `FLAC` (Echo Hiding)
+- Explore and evaluate existing Python libraries such as `pydub`, `PyPDF2`, `python-docx`
+- Organize the project using **modular structure** – one class/module per format
+- Create **test cases** to validate that the **original content is not altered**
 
-* **Audio format:** The implementation supports only 16‑bit mono WAV
-  files.  Attempts to encode or decode other formats will raise an
-  error.  This constraint simplifies the bit indexing logic and is
-  sufficient for demonstration purposes.
-* **Capacity:** The number of bits available for embedding is
-  `n_samples * n_lsb`, where `n_samples` is the number of audio
-  samples.  A typical five‑second, 44.1 kHz file provides around
-  220 000 samples and thus roughly 220 000 bits (27.5 kB) of capacity
-  when using a single LSB.  If the message is too long a
-  `ValueError` is raised.
-* **Security:** While OpenSSL's AES‑256 implementation with PBKDF2 is
-  considered secure, the overall scheme is still a simple LSB
-  replacement technique.  As noted in research, replacing the least
-  significant bits of audio samples introduces detectable statistical
-  changes【51454510526638†L650-L706】.  For high‑stakes applications you should
-  consider more sophisticated steganographic methods, such as LSB
-  matching or spread‑spectrum techniques.
+---
 
-## Acknowledgements
-
-The overall approach for reading and modifying WAV samples draws on
-Daniel Lerch Hostalot’s tutorial on LSB steganography in images and
-audio, which explains that WAV files store 16‑bit samples and that
-only the lower byte should be altered【51454510526638†L650-L706】.  The idea of
-using a salt and a password‑derived key for encryption comes from
-Lane Wagner’s article on AES‑256 encryption, which emphasises
-generating a random salt and deriving the key via Scrypt【132564739309937†L74-L92】【132564739309937†L96-L106】.
