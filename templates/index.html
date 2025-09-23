@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>סטגנוגרפיה בקול - הדגמה</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+	<header class="site-header">
+		<h1>סטגנוגרפיה בקובצי WAV</h1>
+		<p class="subtitle">הטמעה וחילוץ הודעות באמצעות LSB עם הצפנה</p>
+	</header>
+
+	<main class="container">
+		{% with messages = get_flashed_messages(with_categories=true) %}
+			{% if messages %}
+				<ul class="flash-list">
+					{% for category, message in messages %}
+						<li class="flash {{ category }}">{{ message }}</li>
+					{% endfor %}
+				</ul>
+			{% endif %}
+		{% endwith %}
+
+		<section class="card">
+			<h2>הטמעת הודעה</h2>
+			<form class="grid" action="{{ url_for('encode_route') }}" method="post" enctype="multipart/form-data">
+				<label>
+					<span>קובץ WAV</span>
+					<input type="file" name="audio" accept=".wav" required>
+				</label>
+				<label>
+					<span>הודעה להצפנה</span>
+					<textarea name="message" rows="4" placeholder="הקלד/י הודעה או השאר/י ריק אם תעלה/י קובץ טקסט."></textarea>
+				</label>
+				<label>
+					<span>סיסמה</span>
+					<input type="password" name="password" required>
+				</label>
+				<label>
+					<span>מס' LSB</span>
+					<select name="n_lsb">
+						<option value="1">1</option>
+						<option value="2">2</option>
+						<option value="3">3</option>
+					</select>
+				</label>
+				<div class="actions">
+					<button type="submit" class="primary">הטמן/י והוריד/י</button>
+				</div>
+			</form>
+		</section>
+
+		<section class="card">
+			<h2>חילוץ הודעה</h2>
+			<form class="grid" action="{{ url_for('decode_route') }}" method="post" enctype="multipart/form-data">
+				<label>
+					<span>קובץ WAV</span>
+					<input type="file" name="audio" accept=".wav" required>
+				</label>
+				<label>
+					<span>סיסמה</span>
+					<input type="password" name="password" required>
+				</label>
+				<label>
+					<span>מס' LSB</span>
+					<select name="n_lsb">
+						<option value="1">1</option>
+						<option value="2">2</option>
+						<option value="3">3</option>
+					</select>
+				</label>
+				<div class="actions">
+					<button type="submit">חלץ/י</button>
+				</div>
+			</form>
+
+			{% if decoded_text %}
+				<div class="result">
+					<h3>הודעה שהוחזרה:</h3>
+					<pre>{{ decoded_text }}</pre>
+				</div>
+			{% endif %}
+		</section>
+	</main>
+
+	<footer class="site-footer">
+		<p>פרויקט סטגנוגרפיה - תואר • LSB + AES‑256 (OpenSSL)</p>
+	</footer>
+</body>
+</html> 
