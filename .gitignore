@@ -1,55 +1,19 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
-
-# Environment and dependency folders
-env/
-venv/
-.venv/
-
-# MacOS system files
-.DS_Store
-
-# VSCode settings (optional)
-.vscode/
-
-# Logs and dumps
-*.log
-*.bak
-
-# Output or test files
-output/
-*.bmp
-*.png
-*.wav
-*.flac
-*.avi
-*.mkv
-*.pdf
-*.docx
-
-# Encrypted or embedded files (if you're generating them)
-*.enc
-*.secret
-*.steg
-
-# Secrets (important!)
-*.key
-*.pem
-*.cert
-*.der
-
-# Python virtualenv file
-Pipfile.lock
-
-# Ignore encryption password inputs (if stored temporarily)
-password.txt
-
 # Ignore Python cache
 __pycache__/
+*.pyc
 
-סטגנוגרפיה/
+# Virtual env
+.venv/
+env/
+venv/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+
+# Ignore your temporary folder
+Ignoreable/
