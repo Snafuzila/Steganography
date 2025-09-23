@@ -1,6 +1,7 @@
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Random import get_random_bytes
+import base64
 
 def encrypt_message(password: str, message: str) -> str:
     """
