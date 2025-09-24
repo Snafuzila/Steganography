@@ -4,8 +4,12 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
 .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
 h1 { font-weight: 700; margin: 8px 0 16px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-.card { background: var(--card); border: 1px solid #1f2937; border-radius: 12px; padding: 16px; }
+.card { background: var(--card); border: 1px solid #f2f3f5; border-radius: 12px; padding: 16px; }
 .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.password-field { position: relative; }
+.password-field input { padding-right: 40px; }
+.toggle-pass { position: absolute; right: 8px; top: 32px; background: transparent; color: #e5e7eb; border: none; cursor: pointer; padding: 4px 6px; }
+.toggle-pass:hover { opacity: 0.85; }
 label { font-size: 14px; color: var(--muted); }
 input[type=text], input[type=password], select, textarea, input[type=file] { width: 100%; padding: 10px 12px; border: 1px solid #374151; border-radius: 8px; background: #0b1220; color: var(--text); }
 textarea { resize: vertical; }

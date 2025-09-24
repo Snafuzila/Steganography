@@ -1,39 +1,48 @@
 # crypto_utils.py
-# Simplified version: works as a pass-through (no AES, no password).
-# Keeping function signatures the same for future compatibility.
+# Simple XOR-based encryption for WAV steganography
 
-<<<<<<< HEAD
-def encrypt_message(message: str, password: str = None) -> str:
-    """
-    Stub function: returns the message as-is (no encryption).
-    The 'password' parameter is kept only for API compatibility.
-    """
-    return message
-
-def decrypt_message(token: str, password: str = None) -> str:
-    """
-    Stub function: returns the token as-is (no decryption).
-    If the token is None, return None to preserve expected behavior.
-    """
-    if token is None:
-        return None
-    return token
-=======
 def encrypt_message(message: str, password: str = None) -> bytes:
     """
-    Stub: return message as UTF-8 bytes (no real encryption).
-    This keeps the downstream API (which expects bytes) satisfied.
+    Simple XOR encryption with password.
+    Returns encrypted bytes.
     """
-    return message.encode("utf-8")
+    if not password:
+        return message.encode("utf-8")
+    
+    message_bytes = message.encode("utf-8")
+    password_bytes = password.encode("utf-8")
+    
+    # XOR each byte with password bytes (cycling through password)
+    encrypted = bytearray()
+    for i, byte in enumerate(message_bytes):
+        encrypted.append(byte ^ password_bytes[i % len(password_bytes)])
+    
+    return bytes(encrypted)
 
 def decrypt_message(token: bytes, password: str = None) -> str:
     """
-    Stub: interpret token as UTF-8 bytes and return a string.
-    If token is None, return None.
+    Simple XOR decryption with password.
+    Returns decrypted string or garbled text if password is wrong.
     """
     if token is None:
         return None
-    if isinstance(token, bytes):
-        return token.decode("utf-8", errors="replace")
-    return str(token)
->>>>>>> master
+    
+    if not password:
+        # No password provided, try to decode as UTF-8
+        try:
+            return token.decode("utf-8", errors="replace")
+        except:
+            return str(token)
+    
+    password_bytes = password.encode("utf-8")
+    
+    # XOR each byte with password bytes (cycling through password)
+    decrypted = bytearray()
+    for i, byte in enumerate(token):
+        decrypted.append(byte ^ password_bytes[i % len(password_bytes)])
+    
+    # Try to decode as UTF-8, but allow replacement chars for wrong passwords
+    try:
+        return decrypted.decode("utf-8", errors="replace")
+    except:
+        return str(decrypted)

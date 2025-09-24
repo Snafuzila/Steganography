@@ -42,8 +42,6 @@ def create_app() -> Flask:
         spec.loader.exec_module(module)
         return module
 
-<<<<<<< HEAD
-=======
     def load_module_in_package(package_name: str, module_name: str, module_path: Path, package_dir: Path):
         """Load a module as if it were inside a package so relative imports work.
 
@@ -66,7 +64,6 @@ def create_app() -> Flask:
         spec.loader.exec_module(mod)
         return mod
 
->>>>>>> master
     # Simple whitespace stego for txt/html/css (encryption handled separately)
     def _text_to_binary(text: str) -> str:
         return ''.join(format(ord(c), '08b') for c in text)
@@ -104,6 +101,15 @@ def create_app() -> Flask:
         bit_str = ''.join(bits)
         bit_str = bit_str[:len(bit_str) - (len(bit_str) % 8)]
         return _binary_to_text(bit_str)
+
+    def is_garbled_text(text: str) -> bool:
+        """Check if text appears to be garbled (wrong password result)."""
+        if not text:
+            return False
+        # Count non-printable and replacement characters
+        garbled_chars = sum(1 for c in text if ord(c) < 32 or c == '\ufffd')
+        # If more than 30% of characters are garbled, likely wrong password
+        return garbled_chars / len(text) > 0.3
 
     @app.context_processor
     def inject_globals():
@@ -190,6 +196,8 @@ def create_app() -> Flask:
                 img = Image.open(str(input_path))
                 new_img = lsb_img_hide_text_with_length(img, ciphertext)
                 new_img.save(str(output_path))
+                flash("Encoded file created: " + output_path.name, "success")
+                return redirect(url_for("index", download=output_path.name))
             elif ext in {"avi", "mkv", "mov"}:
                 # Sample Comparison video/audio
                 encoder_module = load_module_from_path(
@@ -202,6 +210,7 @@ def create_app() -> Flask:
                 cf_str = request.form.get("compare_fraction") or ""
                 header_bits = request.form.get("header_bits") or ""
                 footer_bits = request.form.get("footer_bits") or ""
+                threshold_str = request.form.get("threshold") or ""
 
                 kwargs = {}
                 changed = []
@@ -218,11 +227,26 @@ def create_app() -> Flask:
                     except ValueError:
                         pass
                 if header_bits:
-                    kwargs["header"] = header_bits
-                    changed.append(f"header={header_bits}")
+                    if all(c in "01" for c in header_bits):
+                        kwargs["header"] = header_bits
+                        changed.append(f"header={header_bits}")
+                    else:
+                        flash("Header must contain only 0 and 1.", "error")
+                        return redirect(url_for("index"))
                 if footer_bits:
-                    kwargs["footer"] = footer_bits
-                    changed.append(f"footer={footer_bits}")
+                    if all(c in "01" for c in footer_bits):
+                        kwargs["footer"] = footer_bits
+                        changed.append(f"footer={footer_bits}")
+                    else:
+                        flash("Footer must contain only 0 and 1.", "error")
+                        return redirect(url_for("index"))
+                if threshold_str:
+                    try:
+                        kwargs["threshold"] = int(threshold_str)
+                        changed.append(f"threshold={kwargs['threshold']}")
+                    except ValueError:
+                        flash("Threshold must be an integer.", "error")
+                        return redirect(url_for("index"))
 
                 # Encoder returns output path. Capture stdout to parse chosen frame size/duration.
                 import io, contextlib, re
@@ -274,11 +298,9 @@ def create_app() -> Flask:
                     )
                     return redirect(url_for("index"))
                 embed_message(str(input_path), str(output_path), ciphertext)
+                flash("Encoded file created: " + output_path.name, "success")
+                return redirect(url_for("index", download=output_path.name))
             elif ext == "wav":
-<<<<<<< HEAD
-                flash("WAV encoding not supported in this build.", "error")
-                return redirect(url_for("index"))
-=======
                 # LSB WAV steganography (uses module's own crypto)
                 wav_module = load_module_in_package(
                     package_name="lsb",
@@ -308,7 +330,6 @@ def create_app() -> Flask:
                     "success",
                 )
                 return redirect(url_for("index", download=output_path.name))
->>>>>>> master
             else:
                 flash("Unsupported file type for encoding.", "error")
                 return redirect(url_for("index"))
@@ -393,6 +414,7 @@ def create_app() -> Flask:
                     d_cf = request.form.get("decode_compare_fraction") or ""
                     d_header = request.form.get("decode_header_bits") or ""
                     d_footer = request.form.get("decode_footer_bits") or ""
+                    d_threshold = request.form.get("decode_threshold") or ""
                     kwargs = {}
                     if d_fd:
                         try:
@@ -405,9 +427,23 @@ def create_app() -> Flask:
                         except ValueError:
                             pass
                     if d_header:
-                        kwargs["header_bits"] = [int(b) for b in d_header]
+                        if all(c in "01" for c in d_header):
+                            kwargs["header_bits"] = [int(b) for b in d_header]
+                        else:
+                            flash("Header must contain only 0 and 1.", "error")
+                            return redirect(url_for("index"))
                     if d_footer:
-                        kwargs["footer_bits"] = [int(b) for b in d_footer]
+                        if all(c in "01" for c in d_footer):
+                            kwargs["footer_bits"] = [int(b) for b in d_footer]
+                        else:
+                            flash("Footer must contain only 0 and 1.", "error")
+                            return redirect(url_for("index"))
+                    if d_threshold:
+                        try:
+                            kwargs["threshold"] = int(d_threshold)
+                        except ValueError:
+                            flash("Threshold must be an integer.", "error")
+                            return redirect(url_for("index"))
                     decoded = decode_audio_stego(str(audio_wav), **kwargs)
                     # Decrypt the extracted ciphertext
                     enc_module = load_module_from_path(
@@ -415,8 +451,27 @@ def create_app() -> Flask:
                         BASE_DIR / "encypt functions" / "encrypt.py",
                     )
                     decrypt_message = getattr(enc_module, "decrypt_message")
-                    encrypted_blob = decoded if isinstance(decoded, str) else (decoded.decode() if decoded else None)
-                    decoded_message = decrypt_message(password, encrypted_blob) if encrypted_blob else None
+                    # Handle both string and bytes from video decoder
+                    try:
+                        if isinstance(decoded, str):
+                            # Already a string, decrypt it (handle encoding errors)
+                            try:
+                                decoded_message = decrypt_message(password, decoded.encode('utf-8'))
+                            except UnicodeEncodeError:
+                                # String contains invalid UTF-8, treat as bytes
+                                decoded_message = decrypt_message(password, decoded.encode('utf-8', errors='replace'))
+                        elif isinstance(decoded, bytes):
+                            # Raw bytes, decrypt directly
+                            decoded_message = decrypt_message(password, decoded)
+                        else:
+                            decoded_message = None
+                    except Exception:
+                        # Most likely parameter mismatch (e.g., wrong frame duration or header/footer)
+                        flash(
+                            "There was a problem with the parameters (e.g., frame duration/compare fraction/header/footer). Please try again.",
+                            "error",
+                        )
+                        return redirect(url_for("index"))
             elif ext in {"txt", "css", "html"}:
                 ws_module = load_module_from_path(
                     "mainWhiteS",
@@ -430,8 +485,6 @@ def create_app() -> Flask:
                 decrypt_message = getattr(enc_module, "decrypt_message")
                 encrypted = extract_message(str(input_path))
                 decoded_message = decrypt_message(password, encrypted)
-<<<<<<< HEAD
-=======
             elif ext == "wav":
                 # WAV decode (module returns plaintext when password provided)
                 wav_module = load_module_in_package(
@@ -454,15 +507,18 @@ def create_app() -> Flask:
                     save_to_file=False,
                     password=password,
                 )
->>>>>>> master
             else:
                 flash("Unsupported file type for decoding.", "error")
                 return redirect(url_for("index"))
 
-            if decoded_message is None or decoded_message == "":
+            if decoded_message is None:
                 flash("Decoding failed or message empty. Check password/parameters.", "error")
             else:
-                flash(f"Decoded message: {decoded_message}", "success")
+                # Check if the message appears garbled (wrong password)
+                if is_garbled_text(decoded_message):
+                    flash(f"Decoded message (wrong password?): {decoded_message}", "error")
+                else:
+                    flash(f"Decoded message: {decoded_message}", "success")
         except Exception as e:
             flash(f"Decoding failed: {e}", "error")
         finally:
