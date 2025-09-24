@@ -22,7 +22,7 @@ venv/
 *.bak
 
 # Output or test files
-output/
+outputs/
 *.bmp
 *.png
 *.wav
@@ -31,6 +31,7 @@ output/
 *.mkv
 *.pdf
 *.docx
+*.mov
 
 # Encrypted or embedded files (if you're generating them)
 *.enc
