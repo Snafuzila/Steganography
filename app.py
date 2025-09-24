@@ -42,6 +42,31 @@ def create_app() -> Flask:
         spec.loader.exec_module(module)
         return module
 
+<<<<<<< HEAD
+=======
+    def load_module_in_package(package_name: str, module_name: str, module_path: Path, package_dir: Path):
+        """Load a module as if it were inside a package so relative imports work.
+
+        Ensures a synthetic package entry exists in sys.modules and then loads
+        the target module with a fully-qualified name like 'pkg.mod'.
+        """
+        # Ensure synthetic package
+        if package_name not in sys.modules:
+            pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(package_name, loader=None))
+            pkg.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
+            sys.modules[package_name] = pkg
+        fqmn = f"{package_name}.{module_name}"
+        spec = importlib.util.spec_from_file_location(fqmn, str(module_path))
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load module {fqmn} from {module_path}")
+        mod = importlib.util.module_from_spec(spec)
+        # Set package attribute so 'from .x import y' resolves
+        mod.__package__ = package_name
+        sys.modules[fqmn] = mod
+        spec.loader.exec_module(mod)
+        return mod
+
+>>>>>>> master
     # Simple whitespace stego for txt/html/css (encryption handled separately)
     def _text_to_binary(text: str) -> str:
         return ''.join(format(ord(c), '08b') for c in text)
@@ -250,8 +275,40 @@ def create_app() -> Flask:
                     return redirect(url_for("index"))
                 embed_message(str(input_path), str(output_path), ciphertext)
             elif ext == "wav":
+<<<<<<< HEAD
                 flash("WAV encoding not supported in this build.", "error")
                 return redirect(url_for("index"))
+=======
+                # LSB WAV steganography (uses module's own crypto)
+                wav_module = load_module_in_package(
+                    package_name="lsb",
+                    module_name="lsb_wav",
+                    module_path=BASE_DIR / "encypt functions" / "lsb" / "lsb_wav.py",
+                    package_dir=BASE_DIR / "encypt functions" / "lsb",
+                )
+                encode_wav = getattr(wav_module, "encode_message")
+                # Optional LSBs param (1-3)
+                n_lsb_str = request.form.get("wav_n_lsb") or ""
+                n_lsb = 1
+                try:
+                    if n_lsb_str:
+                        n_lsb = max(1, min(3, int(n_lsb_str)))
+                except ValueError:
+                    n_lsb = 1
+                # Call encoder; module handles encryption internally with password
+                encode_wav(
+                    audio_path=str(input_path),
+                    message_text=message,
+                    output_path=str(output_path),
+                    n_lsb=n_lsb,
+                    password=password,
+                )
+                flash(
+                    f"Encoded file created: {output_path.name} | Params: n_lsb={n_lsb}",
+                    "success",
+                )
+                return redirect(url_for("index", download=output_path.name))
+>>>>>>> master
             else:
                 flash("Unsupported file type for encoding.", "error")
                 return redirect(url_for("index"))
@@ -373,6 +430,31 @@ def create_app() -> Flask:
                 decrypt_message = getattr(enc_module, "decrypt_message")
                 encrypted = extract_message(str(input_path))
                 decoded_message = decrypt_message(password, encrypted)
+<<<<<<< HEAD
+=======
+            elif ext == "wav":
+                # WAV decode (module returns plaintext when password provided)
+                wav_module = load_module_in_package(
+                    package_name="lsb",
+                    module_name="lsb_wav",
+                    module_path=BASE_DIR / "encypt functions" / "lsb" / "lsb_wav.py",
+                    package_dir=BASE_DIR / "encypt functions" / "lsb",
+                )
+                decode_wav = getattr(wav_module, "decode_message")
+                n_lsb_str = request.form.get("decode_wav_n_lsb") or ""
+                n_lsb = 1
+                try:
+                    if n_lsb_str:
+                        n_lsb = max(1, min(3, int(n_lsb_str)))
+                except ValueError:
+                    n_lsb = 1
+                decoded_message = decode_wav(
+                    stego_audio_path=str(input_path),
+                    n_lsb=n_lsb,
+                    save_to_file=False,
+                    password=password,
+                )
+>>>>>>> master
             else:
                 flash("Unsupported file type for decoding.", "error")
                 return redirect(url_for("index"))

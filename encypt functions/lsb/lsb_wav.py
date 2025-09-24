@@ -295,6 +295,11 @@ def decode_message(
         with open(out_file, "w", encoding="utf-8") as f:
             f.write(plaintext)
 
+<<<<<<< HEAD
+=======
+    return plaintext
+
+>>>>>>> master
 
     """Extract and decrypt a hidden message from a stego WAV file.
 

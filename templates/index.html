@@ -8,7 +8,11 @@
   </head>
   <body>
     <div class="container">
+<<<<<<< HEAD
       <h1>Steganography Toolkit</h1>
+=======
+      <h1>StegX</h1>
+>>>>>>> master
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="flash-container">
@@ -21,7 +25,11 @@
 
       <div class="grid">
         <section class="card">
+<<<<<<< HEAD
           <h2>Encode</h2>
+=======
+          <h2>Encrypt</h2>
+>>>>>>> master
           <form action="{{ url_for('encode') }}" method="post" enctype="multipart/form-data">
             <div class="field">
               <label>Choose file type</label>
@@ -64,14 +72,29 @@
               <label>Upload file</label>
               <input type="file" name="upload_file" required />
             </div>
+<<<<<<< HEAD
             <div class="actions">
               <button type="submit">Encode</button>
+=======
+            <div id="wav_params" class="video-params" style="display:none;">
+              <div class="field">
+                <label>WAV LSBs per sample (1-3)</label>
+                <input type="text" name="wav_n_lsb" placeholder="1" />
+              </div>
+            </div>
+            <div class="actions">
+              <button type="submit">Encrypt</button>
+>>>>>>> master
             </div>
           </form>
         </section>
 
         <section class="card">
+<<<<<<< HEAD
           <h2>Decode</h2>
+=======
+          <h2>Decrypt</h2>
+>>>>>>> master
           <form action="{{ url_for('decode') }}" method="post" enctype="multipart/form-data">
             <div class="field">
               <label>Choose file type</label>
@@ -108,8 +131,19 @@
               <label>Upload file</label>
               <input type="file" name="decode_upload_file" required />
             </div>
+<<<<<<< HEAD
             <div class="actions">
               <button type="submit">Decode</button>
+=======
+            <div id="decode_wav_params" class="video-params" style="display:none;">
+              <div class="field">
+                <label>WAV LSBs per sample (1-3)</label>
+                <input type="text" name="decode_wav_n_lsb" placeholder="1" />
+              </div>
+            </div>
+            <div class="actions">
+              <button type="submit">Decrypt</button>
+>>>>>>> master
             </div>
           </form>
         </section>
@@ -123,11 +157,21 @@
     const params = document.getElementById('video_params');
     function toggleParams() {
       const v = (typeSelect?.value || '').toLowerCase();
+<<<<<<< HEAD
       if (v === 'avi' || v === 'mkv' || v === 'mov') {
+=======
+      const isVideo = v === 'avi' || v === 'mkv' || v === 'mov';
+      const isWav = v === 'wav';
+      if (isVideo) {
+>>>>>>> master
         params.style.display = '';
       } else {
         params.style.display = 'none';
       }
+<<<<<<< HEAD
+=======
+      document.getElementById('wav_params').style.display = isWav ? '' : 'none';
+>>>>>>> master
     }
     typeSelect?.addEventListener('change', toggleParams);
     toggleParams();
@@ -136,11 +180,21 @@
     const dParams = document.getElementById('decode_video_params');
     function dToggleParams() {
       const v = (dTypeSelect?.value || '').toLowerCase();
+<<<<<<< HEAD
       if (v === 'avi' || v === 'mkv' || v === 'mov') {
+=======
+      const isVideo = v === 'avi' || v === 'mkv' || v === 'mov';
+      const isWav = v === 'wav';
+      if (isVideo) {
+>>>>>>> master
         dParams.style.display = '';
       } else {
         dParams.style.display = 'none';
       }
+<<<<<<< HEAD
+=======
+      document.getElementById('decode_wav_params').style.display = isWav ? '' : 'none';
+>>>>>>> master
     }
     dTypeSelect?.addEventListener('change', dToggleParams);
     dToggleParams();
