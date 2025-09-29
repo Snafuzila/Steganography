@@ -43,7 +43,6 @@ Default parameters:
 - compare_fraction: 0.5
 - header: 1010101010101010
 - footer: 0101010101010101
-- threshold: 0
 """
 
 """Convert a list of bits to a bytearray."""
@@ -78,7 +77,6 @@ def decode_audio_stego(
     compare_fraction=0.5,
     header_bits=[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
     footer_bits=[0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
-    threshold=0
 ):
     sr, data = wav.read(wav_in)
     if data.ndim > 1:
@@ -96,7 +94,7 @@ def decode_audio_stego(
             continue
         idx1 = 0
         idx2 = compare_distance
-        if abs(frame[idx2] - frame[idx1]) <= threshold:
+        if abs(frame[idx2] - frame[idx1]) == 0:
             bits.append(1)
         else:
             bits.append(0)
@@ -119,9 +117,8 @@ def main():
     parser.add_argument("input_video", help=".avi or .mkv input video file")
     parser.add_argument("--frame_duration", type=float, default=0.1, help="Frame duration in seconds")
     parser.add_argument("--compare_fraction", type=float, default=0.5, help="Compare distance as fraction of frame")
-    parser.add_argument("--header", type=str, default="1010101010101010", help="Header bits")
-    parser.add_argument("--footer", type=str, default="0101010101010101", help="Footer bits")
-    parser.add_argument("--threshold", type=int, default=0, help="Equality threshold")
+    parser.add_argument("--header", type=str, default="1010101010101010", help="Header bits (must be at least 16 chars and divisible by 8)")
+    parser.add_argument("--footer", type=str, default="0101010101010101", help="Footer bits (must be at least 16 chars and divisible by 8)")
     args = parser.parse_args()
 
     header_bits = [int(b) for b in args.header]
@@ -146,7 +143,6 @@ def main():
             compare_fraction=args.compare_fraction,
             header_bits=header_bits,
             footer_bits=footer_bits,
-            threshold=args.threshold
         )
 
 if __name__ == "__main__":

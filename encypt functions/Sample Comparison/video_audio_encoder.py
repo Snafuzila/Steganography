@@ -107,7 +107,6 @@ def encode_message_in_video(
     compare_fraction: float = 0.5,
     header: str = "1010101010101010",
     footer: str = "0101010101010101",
-    threshold: int = 0,  # currently unused but kept for CLI compatibility
 ) -> str:
     """
     Encode a message into the audio track of a video and write to output_video.
@@ -201,9 +200,8 @@ def main():
                         help="Frame duration in seconds (initial value; will be halved if needed)")
     parser.add_argument("--compare_fraction", type=float, default=0.5,
                         help="Compare distance as fraction of frame (0.5=halfway)")
-    parser.add_argument("--header", type=str, default="1010101010101010", help="Header bits")
-    parser.add_argument("--footer", type=str, default="0101010101010101", help="Footer bits")
-    parser.add_argument("--threshold", type=int, default=0, help="Equality threshold (currently unused)")
+    parser.add_argument("--header", type=str, default="1010101010101010", help="Header bits (must be at least 16 chars and divisible by 8)")
+    parser.add_argument("--footer", type=str, default="0101010101010101", help="Footer bits (must be at least 16 chars and divisible by 8)")
     parser.add_argument(
         "--message",
         type=str,
@@ -220,7 +218,6 @@ def main():
         compare_fraction=args.compare_fraction,
         header=args.header,
         footer=args.footer,
-        threshold=args.threshold,
     )
 
 

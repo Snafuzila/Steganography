@@ -210,7 +210,6 @@ def create_app() -> Flask:
                 cf_str = request.form.get("compare_fraction") or ""
                 header_bits = request.form.get("header_bits") or ""
                 footer_bits = request.form.get("footer_bits") or ""
-                threshold_str = request.form.get("threshold") or ""
 
                 kwargs = {}
                 changed = []
@@ -227,26 +226,37 @@ def create_app() -> Flask:
                     except ValueError:
                         pass
                 if header_bits:
-                    if all(c in "01" for c in header_bits):
+                    # Check if header is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
+                    is_valid_length = len(header_bits) >= 16 and len(header_bits) % 8 == 0
+                    is_valid_content = all(c in "01" for c in header_bits)
+                    
+                    if is_valid_length and is_valid_content:
                         kwargs["header"] = header_bits
                         changed.append(f"header={header_bits}")
+                        header_warning = None
                     else:
-                        flash("Header must contain only 0 and 1.", "error")
-                        return redirect(url_for("index"))
+                        if not is_valid_length:
+                            header_warning = f"Header must be at least 16 characters long and divisible by 8 (got {len(header_bits)}). Using default header."
+                        else:
+                            header_warning = "Header must contain only 0 and 1. Using default header."
+                else:
+                    header_warning = None
                 if footer_bits:
-                    if all(c in "01" for c in footer_bits):
+                    # Check if footer is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
+                    is_valid_length = len(footer_bits) >= 16 and len(footer_bits) % 8 == 0
+                    is_valid_content = all(c in "01" for c in footer_bits)
+                    
+                    if is_valid_length and is_valid_content:
                         kwargs["footer"] = footer_bits
                         changed.append(f"footer={footer_bits}")
+                        footer_warning = None
                     else:
-                        flash("Footer must contain only 0 and 1.", "error")
-                        return redirect(url_for("index"))
-                if threshold_str:
-                    try:
-                        kwargs["threshold"] = int(threshold_str)
-                        changed.append(f"threshold={kwargs['threshold']}")
-                    except ValueError:
-                        flash("Threshold must be an integer.", "error")
-                        return redirect(url_for("index"))
+                        if not is_valid_length:
+                            footer_warning = f"Footer must be at least 16 characters long and divisible by 8 (got {len(footer_bits)}). Using default footer."
+                        else:
+                            footer_warning = "Footer must contain only 0 and 1. Using default footer."
+                else:
+                    footer_warning = None
 
                 # Encoder returns output path. Capture stdout to parse chosen frame size/duration.
                 import io, contextlib, re
@@ -268,13 +278,22 @@ def create_app() -> Flask:
                     changed.append(f"frame_size={frame_size_used}")
                     changed.append(f"frame_duration_used={frame_duration_used}")
                 # Always show a single success message including any params available
+                message_parts = ["Encoded file created: " + output_path.name]
+                
                 if changed:
-                    flash(
-                        "Encoded file created: " + output_path.name + " | Params: " + ", ".join(changed),
-                        "success",
-                    )
-                else:
-                    flash("Encoded file created: " + output_path.name, "success")
+                    message_parts.append("Params: " + ", ".join(changed))
+                
+                # Include warnings in the success message
+                warnings = []
+                if header_warning:
+                    warnings.append(header_warning)
+                if footer_warning:
+                    warnings.append(footer_warning)
+                
+                if warnings:
+                    message_parts.append("Warnings: " + "; ".join(warnings))
+                
+                flash(" | ".join(message_parts), "success")
                 # Redirect back to index with a download hint param
                 return redirect(url_for("index", download=output_path.name))
             elif ext in {"txt", "css", "html"}:
@@ -414,7 +433,6 @@ def create_app() -> Flask:
                     d_cf = request.form.get("decode_compare_fraction") or ""
                     d_header = request.form.get("decode_header_bits") or ""
                     d_footer = request.form.get("decode_footer_bits") or ""
-                    d_threshold = request.form.get("decode_threshold") or ""
                     kwargs = {}
                     if d_fd:
                         try:
@@ -427,23 +445,29 @@ def create_app() -> Flask:
                         except ValueError:
                             pass
                     if d_header:
-                        if all(c in "01" for c in d_header):
+                        # Check if header is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
+                        is_valid_length = len(d_header) >= 16 and len(d_header) % 8 == 0
+                        is_valid_content = all(c in "01" for c in d_header)
+                        
+                        if is_valid_length and is_valid_content:
                             kwargs["header_bits"] = [int(b) for b in d_header]
                         else:
-                            flash("Header must contain only 0 and 1.", "error")
-                            return redirect(url_for("index"))
+                            if not is_valid_length:
+                                flash(f"Header must be at least 16 characters long and divisible by 8 (got {len(d_header)}). Using default header.", "warning")
+                            else:
+                                flash("Header must contain only 0 and 1. Using default header.", "warning")
                     if d_footer:
-                        if all(c in "01" for c in d_footer):
+                        # Check if footer is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
+                        is_valid_length = len(d_footer) >= 16 and len(d_footer) % 8 == 0
+                        is_valid_content = all(c in "01" for c in d_footer)
+                        
+                        if is_valid_length and is_valid_content:
                             kwargs["footer_bits"] = [int(b) for b in d_footer]
                         else:
-                            flash("Footer must contain only 0 and 1.", "error")
-                            return redirect(url_for("index"))
-                    if d_threshold:
-                        try:
-                            kwargs["threshold"] = int(d_threshold)
-                        except ValueError:
-                            flash("Threshold must be an integer.", "error")
-                            return redirect(url_for("index"))
+                            if not is_valid_length:
+                                flash(f"Footer must be at least 16 characters long and divisible by 8 (got {len(d_footer)}). Using default footer.", "warning")
+                            else:
+                                flash("Footer must contain only 0 and 1. Using default footer.", "warning")
                     decoded = decode_audio_stego(str(audio_wav), **kwargs)
                     # Decrypt the extracted ciphertext
                     enc_module = load_module_from_path(
