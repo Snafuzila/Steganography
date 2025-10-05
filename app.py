@@ -143,24 +143,20 @@ def create_app() -> Flask:
                 return redirect(url_for("index", download=output_path.name))
 
             elif ext in {"avi", "mkv", "mov"}:
-                # Keep encryption at app layer for video path
                 fd_str = request.form.get("frame_duration") or ""
                 cf_str = request.form.get("compare_fraction") or ""
                 header_bits = request.form.get("header_bits") or ""
                 footer_bits = request.form.get("footer_bits") or ""
 
                 kwargs = {}
-                notes = []
                 if fd_str:
                     try:
                         kwargs["frame_duration"] = float(fd_str)
-                        notes.append(f"frame_duration={kwargs['frame_duration']}")
                     except ValueError:
                         pass
                 if cf_str:
                     try:
                         kwargs["compare_fraction"] = float(cf_str)
-                        notes.append(f"compare_fraction={kwargs['compare_fraction']}")
                     except ValueError:
                         pass
 
@@ -170,7 +166,6 @@ def create_app() -> Flask:
                     valid_chars = all(c in "01" for c in header_bits)
                     if valid_len and valid_chars:
                         kwargs["header"] = header_bits
-                        notes.append("header=custom")
                     else:
                         header_warning = "Invalid header; using default."
                 if footer_bits:
@@ -178,30 +173,37 @@ def create_app() -> Flask:
                     valid_chars = all(c in "01" for c in footer_bits)
                     if valid_len and valid_chars:
                         kwargs["footer"] = footer_bits
-                        notes.append("footer=custom")
                     else:
                         footer_warning = "Invalid footer; using default."
 
-                captured = io.StringIO()
-                from contextlib import redirect_stdout
-                with redirect_stdout(captured):
-                    final_output = video_audio_encoder.encode_message_in_video(
-                        str(input_path),
-                        str(output_path),
-                        message=encrypt_module.encrypt_message(password, message),
-                        **kwargs
-                    )
-                output_path = Path(final_output)
-                log_text = captured.getvalue()
-                m = re.search(r"Using frame size:\s*(\d+)\s*\(([^)]+) seconds per frame\)", log_text)
-                notes_out = []
-                if m:
-                    notes_out += [f"frame_size={m.group(1)}", f"frame_duration_used={m.group(2)}"]
-                if header_warning or footer_warning:
-                    notes_out.append("Warnings: " + "; ".join(filter(None, [header_warning, footer_warning])))
+                res = video_audio_encoder.encode_message_in_video_details(
+                    str(input_path),
+                    str(output_path),
+                    message=encrypt_module.encrypt_message(password, message),
+                    **kwargs
+                )
+                output_path = Path(res.output_path)
+
+                # Only show params that are not DEFAULT
+                details = []
+                if res.header_display != "DEFAULT":
+                    details.append(f"header={res.header_display}")
+                if res.footer_display != "DEFAULT":
+                    details.append(f"footer={res.footer_display}")
+                if res.compare_fraction_display != "DEFAULT":
+                    details.append(f"compare_fraction={res.compare_fraction_display}")
+                # Always show frame info
+                details += [
+                    f"frame_size={res.frame_size}",
+                    f"frame_duration_used={res.frame_duration:.8f}",
+                ]
+                warnings = [w for w in (header_warning, footer_warning) if w]
+                if warnings:
+                    details.append("Warnings: " + "; ".join(warnings))
+
                 msg = "Encoded file created: " + output_path.name
-                if notes or notes_out:
-                    msg += " | " + ", ".join(notes + notes_out)
+                if details:
+                    msg += " | " + ", ".join(details)
                 flash(msg, "success")
                 return redirect(url_for("index", download=output_path.name))
 
@@ -351,6 +353,14 @@ def create_app() -> Flask:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+        return redirect(url_for("index"))
+
+    @app.get("/encode")
+    def encode_get():
+        return redirect(url_for("index"))
+
+    @app.get("/decode")
+    def decode_get():
         return redirect(url_for("index"))
 
     return app

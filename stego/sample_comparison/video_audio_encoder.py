@@ -5,6 +5,8 @@ import numpy as np
 import scipy.io.wavfile as wav
 import math
 import argparse
+from dataclasses import dataclass
+from typing import Optional
 
 """
 This script embeds a secret message into the audio track of a video file using steganography techniques.
@@ -45,7 +47,6 @@ def bytes_to_bits(byteseq):
 def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float, required_bits: int, min_frame_size: int = 150) -> tuple[bool, int, float, int]:
     """
     Returns: (ok, chosen_frame_size, chosen_frame_duration_seconds, max_bits)
-    
     Halving logic: start with frame_duration and keep halving until finding a 
     frame size that can fit the required bits, or reach min_frame_size, 150 by default.
     """
@@ -57,11 +58,11 @@ def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float,
         frame_size //= 2
     return False, -1, -1.0, 0
 
-
+# Encode bits into audio data by modifying samples
 def encode_bits_to_audio(data, bits, frame_size, compare_distance):
-    channels = 1 if data.ndim == 1 else data.shape[1]
-    data_mod = data.copy()
-    total_samples = data_mod.shape[0]
+    channels = 1 if data.ndim == 1 else data.shape[1] # Mono or Stereo
+    data_mod = data.copy() # Avoid modifying original data
+    total_samples = data_mod.shape[0] # Number of samples (per channel)
     for i, bit in enumerate(bits):
         frame_start = i * frame_size
         frame_end = frame_start + frame_size
@@ -70,8 +71,9 @@ def encode_bits_to_audio(data, bits, frame_size, compare_distance):
             break
         frame_end = min(frame_end, total_samples)
         for ch in range(channels):
+            # Extract the current frame for the channel
             frame = data_mod[frame_start:frame_end] if channels == 1 else data_mod[frame_start:frame_end, ch]
-            actual_compare_distance = min(compare_distance, len(frame) - 1)
+            actual_compare_distance = min(compare_distance, len(frame) - 1) # Ensure within frame
             idx1 = 0
             idx2 = actual_compare_distance
             if len(frame) < 2:
@@ -115,23 +117,43 @@ def _generate_default_output_path(input_video_path: str, suffix: str = "_output"
         n += 1
 
 
-def encode_message_in_video(
-    input_video: str,
-    output_video: str | None = None,
-    message: str | None = None,
-    *,
-    frame_duration: float = 0.1,
-    compare_fraction: float = 0.5,
-    header: str = "1010101010101010",
-    footer: str = "0101010101010101",
-) -> str:
-    """
-    Encode a message into the audio track of a video and write to output_video.
-    If message is None, uses SECRET_MESSAGE.
-    If output_video is None, auto-generates a path based on input video name with '_output',
-    avoiding overwrites by appending (1), (2), etc.
+# Internal defaults (not intended to be imported by the app)
+_DEFAULT_FRAME_DURATION = 0.1
+_DEFAULT_COMPARE_FRACTION = 0.5
+_DEFAULT_HEADER = "1010101010101010"
+_DEFAULT_FOOTER = "0101010101010101"
 
-    Returns the final output path used.
+@dataclass
+class EncodeResult:
+    output_path: str
+    frame_size: int
+    frame_duration: float
+    compare_fraction: float
+    header: str
+    footer: str
+    # Display helpers: "DEFAULT" if unchanged, otherwise the actual value (as string)
+    header_display: str
+    footer_display: str
+    compare_fraction_display: str
+    # Extra info
+    total_bits: int
+    max_bits: int
+    sample_rate: int
+    total_samples: int
+
+def encode_message_in_video_details(
+    input_video: str,
+    output_video: Optional[str] = None,
+    message: Optional[str] = None,
+    *,
+    frame_duration: float = _DEFAULT_FRAME_DURATION,
+    compare_fraction: float = _DEFAULT_COMPARE_FRACTION,
+    header: str = _DEFAULT_HEADER,
+    footer: str = _DEFAULT_FOOTER,
+) -> EncodeResult:
+    """
+    Encode a message into the audio track and return rich details about the encoding.
+    Does the same work as encode_message_in_video, but returns an EncodeResult instead of a path.
     """
     # Decide the message
     if message is None:
@@ -153,17 +175,16 @@ def encode_message_in_video(
         # Extracting audio, using 48kHz, PCM 16-bit WAV to ensure compatibility
         cmd = [
             "ffmpeg", "-y", "-i", input_video, "-vn",
-            "-acodec", "pcm_s16le",
-            "-ar", "48000", audio_wav
+            "-acodec", "pcm_s16le", "-ar", "48000", audio_wav
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Embedding message
+        # Read audio
         sr, data = wav.read(audio_wav)
         total_samples = data.shape[0]
 
-        # Preflight capacity check and frame size selection
-        min_frame_size = 150 # ~3ms at 48kHz
+        # Capacity check and frame selection (may reduce frame size)
+        min_frame_size = 150
         need_bits = len(all_bits)
         ok, frame_size, frame_duration_real, max_bits = find_suitable_frame_size(
             total_samples=total_samples,
@@ -173,68 +194,100 @@ def encode_message_in_video(
             min_frame_size=min_frame_size,
         )
 
-        if not ok:
+        if not ok: # Not enough capacity even with smallest frame size
             raise ValueError(
                 (
                     "Message is too large for the given video audio. "
-                    f"Needed {need_bits} bits (header+payload+footer), max available {max_bits} bits "
-                    f"even after reducing frame size down to {min_frame_size} samples (~{min_frame_size/sr:.8f}s). "
-                    "Try a shorter message or use a longer video."
+                    f"Needed {need_bits} bits more "
+                    f"even at frame_size={min_frame_size} (~{min_frame_size/sr:.8f}s)."
                 )
             )
 
         compare_distance = int(frame_size * compare_fraction)
-        print(f"Using frame size: {frame_size} samples ({frame_duration_real:.8f} seconds per frame).")
-        print(f"Make sure to use this frame size ({frame_size}) or frame duration ({frame_duration_real:.8f} seconds) when decoding!")
 
+        # Embed
         data_encoded = encode_bits_to_audio(data, all_bits, frame_size, compare_distance)
         wav.write(stego_wav, sr, data_encoded)
 
-        # Muxing audio and video back together, copying video stream, using PCM 16-bit WAV audio
+        # Mux back
         cmd = [
             "ffmpeg", "-y", "-i", input_video, "-i", stego_wav,
             "-c:v", "copy", "-map", "0:v:0", "-map", "1:a:0",
-            "-c:a", "pcm_s16le",
-            "-movflags", "+faststart", output_video
+            "-c:a", "pcm_s16le", "-movflags", "+faststart", output_video
         ]
         subprocess.run(cmd, check=True)
-        print(f"Done. Output: {output_video}")
 
-    return output_video
+    # Build display markers so the app doesn't need to know defaults
+    header_display = "DEFAULT" if header == _DEFAULT_HEADER else header
+    footer_display = "DEFAULT" if footer == _DEFAULT_FOOTER else footer
+    is_default_cf = abs(compare_fraction - _DEFAULT_COMPARE_FRACTION) <= 1e-12
+    compare_fraction_display = "DEFAULT" if is_default_cf else f"{compare_fraction}"
 
+    return EncodeResult(
+        output_path=output_video,
+        frame_size=frame_size,
+        frame_duration=frame_duration_real,
+        compare_fraction=compare_fraction,
+        header=header,
+        footer=footer,
+        header_display=header_display,
+        footer_display=footer_display,
+        compare_fraction_display=compare_fraction_display,
+        total_bits=need_bits,
+        max_bits=max_bits,
+        sample_rate=sr,
+        total_samples=total_samples,
+    )
+
+def encode_message_in_video(
+    input_video: str,
+    output_video: Optional[str] = None,
+    message: Optional[str] = None,
+    *,
+    frame_duration: float = _DEFAULT_FRAME_DURATION,
+    compare_fraction: float = _DEFAULT_COMPARE_FRACTION,
+    header: str = _DEFAULT_HEADER,
+    footer: str = _DEFAULT_FOOTER,
+) -> str:
+    """
+    Backward-compatible wrapper that returns only the output path.
+    """
+    res = encode_message_in_video_details(
+        input_video=input_video,
+        output_video=output_video,
+        message=message,
+        frame_duration=frame_duration,
+        compare_fraction=compare_fraction,
+        header=header,
+        footer=footer,
+    )
+    print(f"Using frame size: {res.frame_size} samples ({res.frame_duration:.8f} seconds per frame).")
+    print("Make sure to use this frame size or duration when decoding!")
+    print(f"Done. Output: {res.output_path}")
+    return res.output_path
 
 def main():
     parser = argparse.ArgumentParser(description="Embed a message in the audio of a video file.")
     parser.add_argument("input_video", help=".avi or .mkv input video file")
-    # Make output_video optional; if omitted, we auto-generate a name based on input.
-    parser.add_argument(
-        "output_video",
-        nargs="?",
-        help="Output video file (same format as input). If omitted, will use <input>_output.<ext> (or add (1), (2), ... if needed)."
-    )
-    parser.add_argument("--frame_duration", type=float, default=0.1,
-                        help="Frame duration in seconds (initial value; will be halved if needed)")
-    parser.add_argument("--compare_fraction", type=float, default=0.5,
-                        help="Compare distance as fraction of frame (0.5=halfway)")
-    parser.add_argument("--header", type=str, default="1010101010101010", help="Header bits (must be at least 16 chars and divisible by 8)")
-    parser.add_argument("--footer", type=str, default="0101010101010101", help="Footer bits (must be at least 16 chars and divisible by 8)")
-    parser.add_argument(
-        "--message",
-        type=str,
-        default=None,
-        help="The message to encode (omit to use SECRET_MESSAGE)."
-    )
+    parser.add_argument("output_video", nargs="?", help="Optional output path")
+    parser.add_argument("--frame_duration", type=float, default=_DEFAULT_FRAME_DURATION)
+    parser.add_argument("--compare_fraction", type=float, default=_DEFAULT_COMPARE_FRACTION)
+    parser.add_argument("--header", type=str, default=_DEFAULT_HEADER)
+    parser.add_argument("--footer", type=str, default=_DEFAULT_FOOTER)
+    parser.add_argument("--message", type=str, default=None)
     args = parser.parse_args()
-
-    encode_message_in_video(
+    res = encode_message_in_video_details(
         input_video=args.input_video,
-        output_video=args.output_video,  # None -> auto-generate with _output and deduplicate
-        message=args.message,            # None -> use SECRET_MESSAGE
+        output_video=args.output_video,
+        message=args.message,
         frame_duration=args.frame_duration,
         compare_fraction=args.compare_fraction,
         header=args.header,
         footer=args.footer,
     )
+    print(f"Using frame size: {res.frame_size} samples ({res.frame_duration:.8f} seconds per frame).")
+    print("Make sure to use this frame size or duration when decoding!")
+    print(f"Done. Output: {res.output_path}")
 
 
 if __name__ == "__main__":
