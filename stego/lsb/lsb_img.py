@@ -1,5 +1,6 @@
 #lsb_img.py
 from PIL import Image  # Pillow library to handle images
+from stego import encrypt as encrypt_module
 
 # Converts a string message into a binary string
 def text_to_binary(text):
@@ -104,3 +105,22 @@ def lsb_img_extract_text_from_image(image: Image.Image) -> str:
     # Step 4: Convert the bits into text
     hidden_message = binary_to_text(message_bits)
     return hidden_message
+
+def encode_file(image_path: str, output_path: str, message: str, password: str) -> None:
+    """
+    Encrypts message and writes a new stego image to output_path.
+    """
+    from PIL import Image
+    ciphertext = encrypt_module.encrypt_message(password, message)
+    img = Image.open(image_path)
+    new_img = lsb_img_hide_text_with_length(img, ciphertext)
+    new_img.save(output_path)
+
+def decode_file(image_path: str, password: str) -> str:
+    """
+    Extracts and decrypts message from the image at image_path.
+    """
+    from PIL import Image
+    img = Image.open(image_path)
+    encrypted_blob = lsb_img_extract_text_from_image(img)
+    return encrypt_module.decrypt_message(password, encrypted_blob)

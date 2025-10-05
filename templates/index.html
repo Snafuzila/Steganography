@@ -1,63 +1,69 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Steganography UI</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
-  </head>
-  <body>
-    <div class="container">
-      <h1>StegX</h1>
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="flash-container">
-            {% for category, msg in messages %}
-              <div class="flash {{ category }}">{{ msg }}</div>
-            {% endfor %}
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>StegX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <h1>StegX</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, msg in messages %}
+            <div class="flash {{ category }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="grid">
+      <!-- ENCODE -->
+      <section class="card">
+        <h2>Encrypt / Embed</h2>
+        <form action="{{ url_for('encode') }}" method="post" enctype="multipart/form-data">
+          <div class="field">
+            <label for="file_type">Choose file type</label>
+            <select name="file_type" id="file_type" required>
+              <option value="" disabled selected>Select type…</option>
+              {% for opt in allowed_options %}
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+              {% endfor %}
+            </select>
+            <p class="hint">Supported: txt, css, html, video (mov/mkv/avi), image (png/bmp), wav</p>
           </div>
-        {% endif %}
-      {% endwith %}
 
-      <div class="grid">
-        <section class="card">
-          <h2>Encrypt</h2>
-          <form action="{{ url_for('encode') }}" method="post" enctype="multipart/form-data">
+          <div id="video_params" class="video-params" style="display:none;">
             <div class="field">
-              <label>Choose file type</label>
-              <select name="file_type" id="file_type" required>
-                <option value="" disabled selected>Select type…</option>
-                {% for t in allowed_types %}
-                  <option value="{{ t }}">{{ t }}</option>
-                {% endfor %}
-              </select>
-              <p class="hint">Supported: txt, css, html, mov, mkv, avi, png, bmp, wav</p>
+              <label>Frame duration (seconds)</label>
+              <input type="text" name="frame_duration" placeholder="0.1" inputmode="decimal" />
             </div>
+            <div class="field">
+              <label>Compare fraction (0–1)</label>
+              <input type="text" name="compare_fraction" placeholder="0.5" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Header bits (≥16, multiple of 8)</label>
+              <input type="text" name="header_bits" placeholder="1010101010101010" pattern="[01]{16,}" />
+            </div>
+            <div class="field">
+              <label>Footer bits (≥16, multiple of 8)</label>
+              <input type="text" name="footer_bits" placeholder="0101010101010101" pattern="[01]{16,}" />
+            </div>
+          </div>
 
-            <div id="video_params" class="video-params" style="display:none;">
-              <div class="field">
-                <label>Frame duration (seconds)</label>
-                <input type="text" name="frame_duration" placeholder="0.1" />
-              </div>
-              <div class="field">
-                <label>Compare fraction (0-1)</label>
-                <input type="text" name="compare_fraction" placeholder="0.5" />
-              </div>
-              <div class="field">
-                <label>Header bits (bits of 0 and 1)</label>
-                <input type="text" name="header_bits" placeholder="1010101010101010" />
-              </div>
-              <div class="field">
-                <label>Footer bits (bits of 0 and 1)</label>
-                <input type="text" name="footer_bits" placeholder="0101010101010101" />
-              </div>
-              <div class="field">
-                <label>Threshold</label>
-                <input type="text" name="threshold" placeholder="0" />
-              </div>
+          <div id="wav_params" class="video-params" style="display:none;">
+            <div class="field">
+              <label>WAV LSBs per sample (1–3)</label>
+              <input type="text" name="wav_n_lsb" placeholder="1" pattern="[1-3]" />
             </div>
+          </div>
+
             <div class="field password-field">
-              <label>Password</label>
+              <label for="enc_password">Password</label>
               <input id="enc_password" type="password" name="password" placeholder="Enter password" required />
               <button type="button" class="toggle-pass" data-target="enc_password" aria-label="Toggle password visibility">
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -65,123 +71,116 @@
                 </svg>
               </button>
             </div>
-            <div class="field">
-              <label>Message to hide</label>
-              <textarea name="message" placeholder="Type your secret message" rows="4" required></textarea>
-            </div>
-            <div class="field">
-              <label>Upload file</label>
-              <input type="file" name="upload_file" required />
-            </div>
-            <div id="wav_params" class="video-params" style="display:none;">
-              <div class="field">
-                <label>WAV LSBs per sample (1-3)</label>
-                <input type="text" name="wav_n_lsb" placeholder="1" />
-              </div>
-            </div>
-            <div class="actions">
-              <button type="submit">Encrypt</button>
-            </div>
-          </form>
-        </section>
 
-        <section class="card">
-          <h2>Decrypt</h2>
-          <form action="{{ url_for('decode') }}" method="post" enctype="multipart/form-data">
-            <div class="field">
-              <label>Choose file type</label>
-              <select name="decode_file_type" id="decode_file_type" required>
-                <option value="" disabled selected>Select type…</option>
-                {% for t in allowed_types %}
-                  <option value="{{ t }}">{{ t }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div id="decode_video_params" class="video-params" style="display:none;">
-              <div class="field">
-                <label>Frame duration (seconds)</label>
-                <input type="text" name="decode_frame_duration" placeholder="0.1" />
-              </div>
-              <div class="field">
-                <label>Compare fraction (0-1)</label>
-                <input type="text" name="decode_compare_fraction" placeholder="0.5" />
-              </div>
-              <div class="field">
-                <label>Header bits (bits of 0 and 1)</label>
-                <input type="text" name="decode_header_bits" placeholder="1010101010101010" />
-              </div>
-              <div class="field">
-                <label>Footer bits (bits of 0 and 1)</label>
-                <input type="text" name="decode_footer_bits" placeholder="0101010101010101" />
-              </div>
-              <div class="field">
-                <label>Threshold</label>
-                <input type="text" name="decode_threshold" placeholder="0" />
-              </div>
-            </div>
-            <div class="field password-field">
-              <label>Password</label>
-              <input id="dec_password" type="password" name="decode_password" placeholder="Enter password (for text types)" />
-              <button type="button" class="toggle-pass" data-target="dec_password" aria-label="Toggle password visibility">
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                  <path d="M12 5C5 5 1 12 1 12s4 7 11 7 11-7 11-7-4-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z" fill="currentColor"/>
-                </svg>
-              </button>
-            </div>
-            <div class="field">
-              <label>Upload file</label>
-              <input type="file" name="decode_upload_file" required />
-            </div>
-            <div id="decode_wav_params" class="video-params" style="display:none;">
-              <div class="field">
-                <label>WAV LSBs per sample (1-3)</label>
-                <input type="text" name="decode_wav_n_lsb" placeholder="1" />
-              </div>
-            </div>
-            <div class="actions">
-              <button type="submit">Decrypt</button>
-            </div>
-          </form>
-        </section>
-      </div>
+          <div class="field">
+            <label>Message to hide</label>
+            <textarea name="message" placeholder="Type your secret message" rows="4" required></textarea>
+          </div>
 
-      <!-- No listing of example or uploaded files -->
+          <div class="field">
+            <label>Upload host file</label>
+            <input type="file" name="upload_file" required />
+          </div>
+
+          <div class="actions">
+            <button type="submit">Encrypt</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- DECODE -->
+      <section class="card">
+        <h2>Decrypt / Extract</h2>
+        <form action="{{ url_for('decode') }}" method="post" enctype="multipart/form-data">
+          <div class="field">
+            <label for="decode_file_type">Choose file type</label>
+            <select name="decode_file_type" id="decode_file_type" required>
+              <option value="" disabled selected>Select type…</option>
+              {% for opt in allowed_options %}
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div id="decode_video_params" class="video-params" style="display:none;">
+            <div class="field">
+              <label>Frame duration (seconds)</label>
+              <input type="text" name="decode_frame_duration" placeholder="0.1" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Compare fraction (0–1)</label>
+              <input type="text" name="decode_compare_fraction" placeholder="0.5" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Header bits (≥16, multiple of 8)</label>
+              <input type="text" name="decode_header_bits" placeholder="1010101010101010" pattern="[01]{16,}" />
+            </div>
+            <div class="field">
+              <label>Footer bits (≥16, multiple of 8)</label>
+              <input type="text" name="decode_footer_bits" placeholder="0101010101010101" pattern="[01]{16,}" />
+            </div>
+          </div>
+
+          <div id="decode_wav_params" class="video-params" style="display:none;">
+            <div class="field">
+              <label>WAV LSBs per sample (1–3)</label>
+              <input type="text" name="decode_wav_n_lsb" placeholder="1" pattern="[1-3]" />
+            </div>
+          </div>
+
+          <div class="field password-field">
+            <label for="dec_password">Password</label>
+            <input id="dec_password" type="password" name="decode_password" placeholder="Enter password" />
+            <button type="button" class="toggle-pass" data-target="dec_password" aria-label="Toggle password visibility">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path d="M12 5C5 5 1 12 1 12s4 7 11 7 11-7 11-7-4-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="field">
+            <label>Upload stego file</label>
+            <input type="file" name="decode_upload_file" required />
+          </div>
+
+          <div class="actions">
+            <button type="submit">Decrypt</button>
+          </div>
+        </form>
+      </section>
     </div>
-  </body>
+  </div>
+
   <script>
     const typeSelect = document.getElementById('file_type');
-    const params = document.getElementById('video_params');
-    function toggleParams() {
+    const videoParams = document.getElementById('video_params');
+    const wavParams = document.getElementById('wav_params');
+
+    function toggleEncodeParams() {
       const v = (typeSelect?.value || '').toLowerCase();
-      const isVideo = v === 'avi' || v === 'mkv' || v === 'mov';
-      const isWav = v === 'wav';
-      if (isVideo) {
-        params.style.display = '';
-      } else {
-        params.style.display = 'none';
-      }
-      document.getElementById('wav_params').style.display = isWav ? '' : 'none';
+      const isVideo = v === 'video';  
+      const isWav = v === 'wav';      
+      if (videoParams) videoParams.style.display = isVideo ? '' : 'none';
+      if (wavParams) wavParams.style.display = isWav ? '' : 'none';
     }
-    typeSelect?.addEventListener('change', toggleParams);
-    toggleParams();
+    typeSelect?.addEventListener('change', toggleEncodeParams);
+    toggleEncodeParams();
 
     const dTypeSelect = document.getElementById('decode_file_type');
-    const dParams = document.getElementById('decode_video_params');
-    function dToggleParams() {
-      const v = (dTypeSelect?.value || '').toLowerCase();
-      const isVideo = v === 'avi' || v === 'mkv' || v === 'mov';
-      const isWav = v === 'wav';
-      if (isVideo) {
-        dParams.style.display = '';
-      } else {
-        dParams.style.display = 'none';
-      }
-      document.getElementById('decode_wav_params').style.display = isWav ? '' : 'none';
-    }
-    dTypeSelect?.addEventListener('change', dToggleParams);
-    dToggleParams();
+    const dVideoParams = document.getElementById('decode_video_params');
+    const dWavParams = document.getElementById('decode_wav_params');
 
-    // Auto-start download after redirect if server provided a file
+    function toggleDecodeParams() {
+      const v = (dTypeSelect?.value || '').toLowerCase();
+      const isVideo = v === 'video';  
+      const isWav = v === 'wav';
+      if (dVideoParams) dVideoParams.style.display = isVideo ? '' : 'none';
+      if (dWavParams) dWavParams.style.display = isWav ? '' : 'none';
+    }
+    dTypeSelect?.addEventListener('change', toggleDecodeParams);
+    toggleDecodeParams();
+
+    // Auto-download after redirect
     const urlParams = new URLSearchParams(window.location.search);
     const dl = urlParams.get('download');
     if (dl) {
@@ -200,15 +199,16 @@
       document.querySelectorAll('.toggle-pass').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = btn.getAttribute('data-target');
-          const input = document.getElementById(id);
-          if (!input) return;
-          const isHidden = input.getAttribute('type') === 'password';
-          input.setAttribute('type', isHidden ? 'text' : 'password');
-          btn.innerHTML = isHidden ? svgClosed : svgOpen;
+            const input = document.getElementById(id);
+            if (!input) return;
+            const hidden = input.type === 'password';
+            input.type = hidden ? 'text' : 'password';
+            btn.innerHTML = hidden ? svgClosed : svgOpen;
         });
       });
     })();
   </script>
-  </html>
+</body>
+</html>
 
 

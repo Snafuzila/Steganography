@@ -29,8 +29,9 @@ Usage:
 """
 
 # DEFAULT MESSAGE: used when --message is omitted or when message=None in function calls.
-SECRET_MESSAGE = "A longer secret message that is hidden in the audio track of a video file using steganography techniques."
+SECRET_MESSAGE = "Message to test"
 
+# Convert a byte sequence (or string) to a list of bits (0/1)
 def bytes_to_bits(byteseq):
     if isinstance(byteseq, str):
         byteseq = byteseq.encode()
@@ -39,6 +40,22 @@ def bytes_to_bits(byteseq):
         for i in range(7, -1, -1):
             bits.append((b >> i) & 1)
     return bits
+
+# Try to find a frame size that can accommodate the required bits, halving if needed.
+def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float, required_bits: int, min_frame_size: int = 150) -> tuple[bool, int, float, int]:
+    """
+    Returns: (ok, chosen_frame_size, chosen_frame_duration_seconds, max_bits)
+    
+    Halving logic: start with frame_duration and keep halving until finding a 
+    frame size that can fit the required bits, or reach min_frame_size, 150 by default.
+    """
+    frame_size = max(1, int(sr * frame_duration))
+    while frame_size >= min_frame_size:
+        max_bits = math.ceil(total_samples / frame_size)
+        if max_bits >= required_bits:
+            return True, frame_size, frame_size / sr, max_bits
+        frame_size //= 2
+    return False, -1, -1.0, 0
 
 
 def encode_bits_to_audio(data, bits, frame_size, compare_distance):
@@ -133,7 +150,7 @@ def encode_message_in_video(
         audio_wav = os.path.join(tmpdir, "audio.wav")
         stego_wav = os.path.join(tmpdir, "stego.wav")
 
-        print("Extracting audio...")
+        # Extracting audio, using 48kHz, PCM 16-bit WAV to ensure compatibility
         cmd = [
             "ffmpeg", "-y", "-i", input_video, "-vn",
             "-acodec", "pcm_s16le",
@@ -141,32 +158,31 @@ def encode_message_in_video(
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        print("Embedding message...")
+        # Embedding message
         sr, data = wav.read(audio_wav)
         total_samples = data.shape[0]
 
-        # Start with initial frame size and halve until message fits or min frame size reached
-        initial_frame_size = int(sr * frame_duration)
-        frame_size = initial_frame_size
-        min_frame_size = 150  # as requested
-        found_frame_size = False
+        # Preflight capacity check and frame size selection
+        min_frame_size = 150 # ~3ms at 48kHz
+        need_bits = len(all_bits)
+        ok, frame_size, frame_duration_real, max_bits = find_suitable_frame_size(
+            total_samples=total_samples,
+            sr=sr,
+            frame_duration=frame_duration,
+            required_bits=need_bits,
+            min_frame_size=min_frame_size,
+        )
 
-        while frame_size >= min_frame_size:
-            max_bits = math.ceil(total_samples / frame_size)
-            if len(all_bits) <= max_bits:
-                found_frame_size = True
-                break
-            frame_size = frame_size // 2  # halve frame size and try again
-
-        if not found_frame_size:
-            print(
-                f"Message is too large for the given video, even with minimum frame size "
-                f"({min_frame_size} samples, {min_frame_size/sr:.8f} seconds)."
+        if not ok:
+            raise ValueError(
+                (
+                    "Message is too large for the given video audio. "
+                    f"Needed {need_bits} bits (header+payload+footer), max available {max_bits} bits "
+                    f"even after reducing frame size down to {min_frame_size} samples (~{min_frame_size/sr:.8f}s). "
+                    "Try a shorter message or use a longer video."
+                )
             )
-            print("Try a shorter message or a longer video/audio.")
-            return output_video
 
-        frame_duration_real = frame_size / sr
         compare_distance = int(frame_size * compare_fraction)
         print(f"Using frame size: {frame_size} samples ({frame_duration_real:.8f} seconds per frame).")
         print(f"Make sure to use this frame size ({frame_size}) or frame duration ({frame_duration_real:.8f} seconds) when decoding!")
@@ -174,7 +190,7 @@ def encode_message_in_video(
         data_encoded = encode_bits_to_audio(data, all_bits, frame_size, compare_distance)
         wav.write(stego_wav, sr, data_encoded)
 
-        print("Muxing audio and video...")
+        # Muxing audio and video back together, copying video stream, using PCM 16-bit WAV audio
         cmd = [
             "ffmpeg", "-y", "-i", input_video, "-i", stego_wav,
             "-c:v", "copy", "-map", "0:v:0", "-map", "1:a:0",

@@ -1,6 +1,6 @@
 import os
-import sys
-import importlib.util
+import re
+import io
 import tempfile
 import shutil
 import subprocess
@@ -9,6 +9,11 @@ from typing import Optional
 
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
 from werkzeug.utils import secure_filename
+
+from stego import encrypt as encrypt_module
+from stego.lsb import lsb_img, lsb_wav
+from stego.sample_comparison import video_audio_encoder, video_audio_decoder
+from stego.whitespace import mainWhiteS
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -19,6 +24,25 @@ STATIC_DIR = BASE_DIR / "static"
 
 
 ALLOWED_EXTENSIONS = {"txt", "css", "html", "mov", "mkv", "avi", "png", "bmp", "wav"}
+
+SELECT_CHOICES = {"txt", "css", "html", "wav", "image", "video"}
+
+CHOICE_TO_EXTS = {
+    "txt": {"txt"},
+    "css": {"css"},
+    "html": {"html"},
+    "wav": {"wav"},
+    "image": {"png", "bmp"},
+    "video": {"avi", "mkv", "mov"},
+}
+ALLOWED_OPTIONS = [
+    {"value": "txt", "label": "txt"},
+    {"value": "css", "label": "css"},
+    {"value": "html", "label": "html"},
+    {"value": "wav", "label": "wav"},
+    {"value": "image", "label": "image (png/bmp)"},
+    {"value": "video", "label": "video (avi/mkv/mov)"},
+]
 
 
 def create_app() -> Flask:
@@ -33,88 +57,27 @@ def create_app() -> Flask:
     for d in (UPLOADS_DIR, OUTPUTS_DIR, TEMPLATES_DIR, STATIC_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    def load_module_from_path(module_name: str, file_path: Path):
-        spec = importlib.util.spec_from_file_location(module_name, str(file_path))
-        if spec is None or spec.loader is None:
-            raise ImportError(f"Cannot load module {module_name} from {file_path}")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-        return module
-
-    def load_module_in_package(package_name: str, module_name: str, module_path: Path, package_dir: Path):
-        """Load a module as if it were inside a package so relative imports work.
-
-        Ensures a synthetic package entry exists in sys.modules and then loads
-        the target module with a fully-qualified name like 'pkg.mod'.
-        """
-        # Ensure synthetic package
-        if package_name not in sys.modules:
-            pkg = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(package_name, loader=None))
-            pkg.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
-            sys.modules[package_name] = pkg
-        fqmn = f"{package_name}.{module_name}"
-        spec = importlib.util.spec_from_file_location(fqmn, str(module_path))
-        if spec is None or spec.loader is None:
-            raise ImportError(f"Cannot load module {fqmn} from {module_path}")
-        mod = importlib.util.module_from_spec(spec)
-        # Set package attribute so 'from .x import y' resolves
-        mod.__package__ = package_name
-        sys.modules[fqmn] = mod
-        spec.loader.exec_module(mod)
-        return mod
-
-    # Simple whitespace stego for txt/html/css (encryption handled separately)
+    # --- Whitespace helpers (kept simple) ---
+    """
     def _text_to_binary(text: str) -> str:
         return ''.join(format(ord(c), '08b') for c in text)
 
     def _binary_to_text(binary: str) -> str:
         return ''.join(chr(int(binary[i:i+8], 2)) for i in range(0, len(binary), 8))
-
-    def embed_whitespace(input_file: Path, output_file: Path, payload: str) -> None:
-        bits = _text_to_binary(payload)
-        with open(input_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        if len(bits) > len(lines):
-            raise ValueError("Not enough lines in host file to embed message bits")
-        out_lines = []
-        for i, line in enumerate(lines):
-            if i < len(bits):
-                marker = ' ' if bits[i] == '0' else '\t'
-                out_lines.append(line.rstrip('\n') + marker + '\n')
-            else:
-                out_lines.append(line)
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.writelines(out_lines)
-
-    def extract_whitespace(stego_file: Path) -> str:
-        with open(stego_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        bits = []
-        for line in lines:
-            if line.endswith(' \n') or line.endswith('\t\n'):
-                last_char = line[-2]
-                if last_char == ' ':
-                    bits.append('0')
-                elif last_char == '\t':
-                    bits.append('1')
-        bit_str = ''.join(bits)
-        bit_str = bit_str[:len(bit_str) - (len(bit_str) % 8)]
-        return _binary_to_text(bit_str)
+    """
 
     def is_garbled_text(text: str) -> bool:
-        """Check if text appears to be garbled (wrong password result)."""
         if not text:
             return False
         # Count non-printable and replacement characters
-        garbled_chars = sum(1 for c in text if ord(c) < 32 or c == '\ufffd')
+        garbled = sum(1 for c in text if ord(c) < 32 or c == '\ufffd')
         # If more than 30% of characters are garbled, likely wrong password
-        return garbled_chars / len(text) > 0.3
+        return garbled / len(text) > 0.3
 
     @app.context_processor
     def inject_globals():
         return {
-            "allowed_types": sorted(list(ALLOWED_EXTENSIONS)),
+            "allowed_options": ALLOWED_OPTIONS,  # UPDATED: used by template
         }
 
     def allowed_file(filename: str) -> bool:
@@ -132,12 +95,13 @@ def create_app() -> Flask:
     @app.post("/encode")
     def encode():
         # Inputs
-        chosen_type = request.form.get("file_type")
+        chosen_type = (request.form.get("file_type") or "").lower()
         password = request.form.get("password") or ""
         message = request.form.get("message") or ""
         uploaded = request.files.get("upload_file")
 
-        if not chosen_type or chosen_type not in ALLOWED_EXTENSIONS:
+        # UPDATED: validate against grouped choices
+        if not chosen_type or chosen_type not in SELECT_CHOICES:
             flash("Please choose a valid file type.", "error")
             return redirect(url_for("index"))
 
@@ -149,408 +113,243 @@ def create_app() -> Flask:
             flash("Message is required.", "error")
             return redirect(url_for("index"))
 
-        # Determine input path (uploads only)
-        input_path: Optional[Path] = None
-        temp_dir: Optional[str] = None
-        if uploaded and uploaded.filename:
-            filename = secure_filename(uploaded.filename)
-            if not allowed_file(filename):
-                flash("Uploaded file type not allowed.", "error")
-                return redirect(url_for("index"))
-            temp_dir = tempfile.mkdtemp(prefix="stego_encode_")
-            input_path = Path(temp_dir) / filename
-            uploaded.save(str(input_path))
-        else:
+        if not uploaded or not uploaded.filename:
             flash("Please upload a file to encode.", "error")
             return redirect(url_for("index"))
 
-        # Validate extension vs selected type
-        ext = input_path.suffix.lower().lstrip(".")
-        if chosen_type.lower() != ext:
-            flash("Selected file type and uploaded file do not match. Please select the correct type.", "error")
+        filename = secure_filename(uploaded.filename)
+        if not allowed_file(filename):
+            flash("Uploaded file type not allowed.", "error")
             return redirect(url_for("index"))
 
-        # Choose algorithm based on extension
+        temp_dir = tempfile.mkdtemp(prefix="stego_encode_")
+        input_path = Path(temp_dir) / filename
+        uploaded.save(str(input_path))
+
+        ext = input_path.suffix.lower().lstrip(".")
+        # UPDATED: ensure selected group matches uploaded file extension
+        if ext not in CHOICE_TO_EXTS[chosen_type]:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            flash("Selected type and uploaded file do not match.", "error")
+            return redirect(url_for("index"))
 
         try:
-            output_name = f"stego_{input_path.stem}.{input_path.suffix.lstrip('.') }"
-            output_path = OUTPUTS_DIR / output_name
-
-            # Load encryption API
-            enc_module = load_module_from_path(
-                "encrypt_module",
-                BASE_DIR / "encypt functions" / "encrypt.py",
-            )
-            encrypt_message = getattr(enc_module, "encrypt_message")
-            decrypt_message = getattr(enc_module, "decrypt_message")
+            output_path = OUTPUTS_DIR / f"stego_{input_path.stem}.{ext}"
 
             if ext in {"png", "bmp"}:
-                # Image LSB
-                from PIL import Image
-                lsb_module = load_module_from_path(
-                    "lsb_img",
-                    BASE_DIR / "encypt functions" / "lsb" / "lsb_img.py",
-                )
-                lsb_img_hide_text_with_length = getattr(lsb_module, "lsb_img_hide_text_with_length")
-                ciphertext = encrypt_message(password, message)
-                img = Image.open(str(input_path))
-                new_img = lsb_img_hide_text_with_length(img, ciphertext)
-                new_img.save(str(output_path))
+                # Use complete helper (handles encryption + embedding)
+                lsb_img.encode_file(str(input_path), str(output_path), message, password)
                 flash("Encoded file created: " + output_path.name, "success")
                 return redirect(url_for("index", download=output_path.name))
+
             elif ext in {"avi", "mkv", "mov"}:
-                # Sample Comparison video/audio
-                encoder_module = load_module_from_path(
-                    "video_audio_encoder",
-                    BASE_DIR / "encypt functions" / "Sample Comparison" / "video_audio_encoder.py",
-                )
-                encode_message_in_video = getattr(encoder_module, "encode_message_in_video")
-                # Read optional params
+                # Keep encryption at app layer for video path
                 fd_str = request.form.get("frame_duration") or ""
                 cf_str = request.form.get("compare_fraction") or ""
                 header_bits = request.form.get("header_bits") or ""
                 footer_bits = request.form.get("footer_bits") or ""
 
                 kwargs = {}
-                changed = []
+                notes = []
                 if fd_str:
                     try:
                         kwargs["frame_duration"] = float(fd_str)
-                        changed.append(f"frame_duration={kwargs['frame_duration']}")
+                        notes.append(f"frame_duration={kwargs['frame_duration']}")
                     except ValueError:
                         pass
                 if cf_str:
                     try:
                         kwargs["compare_fraction"] = float(cf_str)
-                        changed.append(f"compare_fraction={kwargs['compare_fraction']}")
+                        notes.append(f"compare_fraction={kwargs['compare_fraction']}")
                     except ValueError:
                         pass
-                if header_bits:
-                    # Check if header is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
-                    is_valid_length = len(header_bits) >= 16 and len(header_bits) % 8 == 0
-                    is_valid_content = all(c in "01" for c in header_bits)
-                    
-                    if is_valid_length and is_valid_content:
-                        kwargs["header"] = header_bits
-                        changed.append(f"header={header_bits}")
-                        header_warning = None
-                    else:
-                        if not is_valid_length:
-                            header_warning = f"Header must be at least 16 characters long and divisible by 8 (got {len(header_bits)}). Using default header."
-                        else:
-                            header_warning = "Header must contain only 0 and 1. Using default header."
-                else:
-                    header_warning = None
-                if footer_bits:
-                    # Check if footer is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
-                    is_valid_length = len(footer_bits) >= 16 and len(footer_bits) % 8 == 0
-                    is_valid_content = all(c in "01" for c in footer_bits)
-                    
-                    if is_valid_length and is_valid_content:
-                        kwargs["footer"] = footer_bits
-                        changed.append(f"footer={footer_bits}")
-                        footer_warning = None
-                    else:
-                        if not is_valid_length:
-                            footer_warning = f"Footer must be at least 16 characters long and divisible by 8 (got {len(footer_bits)}). Using default footer."
-                        else:
-                            footer_warning = "Footer must contain only 0 and 1. Using default footer."
-                else:
-                    footer_warning = None
 
-                # Encoder returns output path. Capture stdout to parse chosen frame size/duration.
-                import io, contextlib, re
+                header_warning = footer_warning = None
+                if header_bits:
+                    valid_len = len(header_bits) >= 16 and len(header_bits) % 8 == 0
+                    valid_chars = all(c in "01" for c in header_bits)
+                    if valid_len and valid_chars:
+                        kwargs["header"] = header_bits
+                        notes.append("header=custom")
+                    else:
+                        header_warning = "Invalid header; using default."
+                if footer_bits:
+                    valid_len = len(footer_bits) >= 16 and len(footer_bits) % 8 == 0
+                    valid_chars = all(c in "01" for c in footer_bits)
+                    if valid_len and valid_chars:
+                        kwargs["footer"] = footer_bits
+                        notes.append("footer=custom")
+                    else:
+                        footer_warning = "Invalid footer; using default."
+
                 captured = io.StringIO()
-                with contextlib.redirect_stdout(captured):
-                    final_output = encode_message_in_video(
+                from contextlib import redirect_stdout
+                with redirect_stdout(captured):
+                    final_output = video_audio_encoder.encode_message_in_video(
                         str(input_path),
                         str(output_path),
-                        message=encrypt_message(password, message),
-                        **kwargs,
+                        message=encrypt_module.encrypt_message(password, message),
+                        **kwargs
                     )
                 output_path = Path(final_output)
-                # Parse encoder output for frame size/duration
                 log_text = captured.getvalue()
-                m = re.search(r"Using frame size:\s*(\d+)\s+samples\s*\(([^)]+) seconds per frame\)", log_text)
+                m = re.search(r"Using frame size:\s*(\d+)\s*\(([^)]+) seconds per frame\)", log_text)
+                notes_out = []
                 if m:
-                    frame_size_used = m.group(1)
-                    frame_duration_used = m.group(2)
-                    changed.append(f"frame_size={frame_size_used}")
-                    changed.append(f"frame_duration_used={frame_duration_used}")
-                # Always show a single success message including any params available
-                message_parts = ["Encoded file created: " + output_path.name]
-                
-                if changed:
-                    message_parts.append("Params: " + ", ".join(changed))
-                
-                # Include warnings in the success message
-                warnings = []
-                if header_warning:
-                    warnings.append(header_warning)
-                if footer_warning:
-                    warnings.append(footer_warning)
-                
-                if warnings:
-                    message_parts.append("Warnings: " + "; ".join(warnings))
-                
-                flash(" | ".join(message_parts), "success")
-                # Redirect back to index with a download hint param
+                    notes_out += [f"frame_size={m.group(1)}", f"frame_duration_used={m.group(2)}"]
+                if header_warning or footer_warning:
+                    notes_out.append("Warnings: " + "; ".join(filter(None, [header_warning, footer_warning])))
+                msg = "Encoded file created: " + output_path.name
+                if notes or notes_out:
+                    msg += " | " + ", ".join(notes + notes_out)
+                flash(msg, "success")
                 return redirect(url_for("index", download=output_path.name))
+
             elif ext in {"txt", "css", "html"}:
-                # Use mainWhiteS helpers; embed ciphertext
-                ws_module = load_module_from_path(
-                    "mainWhiteS",
-                    BASE_DIR / "encypt functions" / "whitespace" / "mainWhiteS.py",
-                )
-                ciphertext = encrypt_message(password, message)
-                text_to_binary = getattr(ws_module, "text_to_binary")
-                binary_to_whitespace = getattr(ws_module, "binary_to_whitespace")
-                embed_message = getattr(ws_module, "embed_message")
-                bits = text_to_binary(ciphertext)
-                ws_stream = binary_to_whitespace(bits)
+                # Complete helper (encrypt + embed). We can pre-check capacity.
+                # Quick capacity check: encrypted length in bits must be <= lines.
+                ciphertext = encrypt_module.encrypt_message(password, message)
                 with open(input_path, 'r', encoding='utf-8', newline='') as f:
                     lines = f.readlines()
-                if len(ws_stream) > len(lines):
-                    flash(
-                        f"Not enough lines in host file to embed message bits (have {len(lines)}, need {len(ws_stream)}).",
-                        "error",
-                    )
+                needed_bits = len(mainWhiteS.text_to_binary(ciphertext))
+                if needed_bits > len(lines):
+                    flash(f"Not enough lines (have {len(lines)}, need {needed_bits}).", "error")
                     return redirect(url_for("index"))
-                embed_message(str(input_path), str(output_path), ciphertext)
+
+                ok = mainWhiteS.encode_file(str(input_path), str(output_path), message, password)
+                if not ok:
+                    flash("Encoding failed: capacity insufficient.", "error")
+                    return redirect(url_for("index"))
                 flash("Encoded file created: " + output_path.name, "success")
                 return redirect(url_for("index", download=output_path.name))
+
             elif ext == "wav":
-                # LSB WAV steganography (uses module's own crypto)
-                wav_module = load_module_in_package(
-                    package_name="lsb",
-                    module_name="lsb_wav",
-                    module_path=BASE_DIR / "encypt functions" / "lsb" / "lsb_wav.py",
-                    package_dir=BASE_DIR / "encypt functions" / "lsb",
-                )
-                encode_wav = getattr(wav_module, "encode_message")
-                # Optional LSBs param (1-3)
-                n_lsb_str = request.form.get("wav_n_lsb") or ""
-                n_lsb = 1
+                n_lsb_str = request.form.get("wav_n_lsb") or "1"
                 try:
-                    if n_lsb_str:
-                        n_lsb = max(1, min(3, int(n_lsb_str)))
+                    n_lsb = int(n_lsb_str)
+                    if n_lsb not in (1, 2, 3):
+                        raise ValueError
                 except ValueError:
+                    flash("Invalid n_lsb (use 1-3). Defaulted to 1.", "warning")
                     n_lsb = 1
-                # Call encoder; module handles encryption internally with password
-                encode_wav(
+                # WAV module already accepts password and performs embedding
+                lsb_wav.encode_message(
                     audio_path=str(input_path),
                     message_text=message,
                     output_path=str(output_path),
                     n_lsb=n_lsb,
                     password=password,
                 )
-                flash(
-                    f"Encoded file created: {output_path.name} | Params: n_lsb={n_lsb}",
-                    "success",
-                )
+                flash(f"Encoded file created: {output_path.name} | Params: n_lsb={n_lsb}", "success")
                 return redirect(url_for("index", download=output_path.name))
+
             else:
-                flash("Unsupported file type for encoding.", "error")
+                flash("Unsupported file type.", "error")
                 return redirect(url_for("index"))
 
-            flash(f"Encoded file created: {output_path.name}", "success")
         except Exception as e:
             flash(f"Encoding failed: {e}", "error")
-            return redirect(url_for("index"))
         finally:
-            if temp_dir:
-                try:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-                except Exception:
-                    pass
-        # Fallback redirect (should be returned earlier)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
         return redirect(url_for("index"))
 
     @app.post("/decode")
     def decode():
-        chosen_type = request.form.get("decode_file_type")
+        chosen_type = (request.form.get("decode_file_type") or "").lower()
         password = request.form.get("decode_password") or ""
         uploaded = request.files.get("decode_upload_file")
 
-        if not chosen_type or chosen_type not in ALLOWED_EXTENSIONS:
+        # UPDATED: validate against grouped choices
+        if not chosen_type or chosen_type not in SELECT_CHOICES:
             flash("Please choose a valid file type.", "error")
             return redirect(url_for("index"))
-
-        # Determine input path (uploads only)
-        input_path: Optional[Path] = None
-        temp_dir: Optional[str] = None
-        if uploaded and uploaded.filename:
-            filename = secure_filename(uploaded.filename)
-            if not allowed_file(filename):
-                flash("Uploaded file type not allowed.", "error")
-                return redirect(url_for("index"))
-            temp_dir = tempfile.mkdtemp(prefix="stego_decode_")
-            input_path = Path(temp_dir) / filename
-            uploaded.save(str(input_path))
-        else:
+        if not uploaded or not uploaded.filename:
             flash("Please upload a file to decode.", "error")
             return redirect(url_for("index"))
 
-        ext = input_path.suffix.lower().lstrip(".")
-        if chosen_type.lower() != ext:
-            flash("Selected file type and uploaded file do not match. Please select the correct type.", "error")
+        filename = secure_filename(uploaded.filename)
+        if not allowed_file(filename):
+            flash("Uploaded file type not allowed.", "error")
             return redirect(url_for("index"))
-        decoded_message: Optional[str] = None
-        try:
-            if ext in {"png", "bmp"}:
-                from PIL import Image
-                lsb_module = load_module_from_path(
-                    "lsb_img",
-                    BASE_DIR / "encypt functions" / "lsb" / "lsb_img.py",
-                )
-                lsb_img_extract_text_from_image = getattr(lsb_module, "lsb_img_extract_text_from_image")
-                enc_module = load_module_from_path(
-                    "encrypt_module",
-                    BASE_DIR / "encypt functions" / "encrypt.py",
-                )
-                decrypt_message = getattr(enc_module, "decrypt_message")
-                img = Image.open(str(input_path))
-                encrypted_blob = lsb_img_extract_text_from_image(img)
-                decoded_message = decrypt_message(password, encrypted_blob)
-            elif ext in {"avi", "mkv", "mov"}:
-                decoder_module = load_module_from_path(
-                    "video_audio_decoder",
-                    BASE_DIR / "encypt functions" / "Sample Comparison" / "video_audio_decoder.py",
-                )
-                decode_audio_stego = getattr(decoder_module, "decode_audio_stego")
 
-                # Extract audio via ffmpeg to wav then decode
+        temp_dir = tempfile.mkdtemp(prefix="stego_decode_")
+        input_path = Path(temp_dir) / filename
+        uploaded.save(str(input_path))
+
+        ext = input_path.suffix.lower().lstrip(".")
+        # UPDATED: ensure selected group matches uploaded file extension
+        if ext not in CHOICE_TO_EXTS[chosen_type]:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            flash("Selected type and file do not match.", "error")
+            return redirect(url_for("index"))
+
+        try:
+            # Branch by actual extension (unchanged)
+            if ext in {"png", "bmp"}:
+                # Complete helper (extract + decrypt)
+                decoded_message = lsb_img.decode_file(str(input_path), password)
+
+            elif ext in {"avi", "mkv", "mov"}:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     audio_wav = Path(tmpdir) / "audio.wav"
-                    cmd = [
-                        "ffmpeg", "-y", "-i", str(input_path), "-vn",
-                        "-acodec", "pcm_s16le", "-ar", "48000", str(audio_wav)
-                    ]
+                    cmd = ["ffmpeg", "-y", "-i", str(input_path), "-vn", "-acodec", "pcm_s16le", "-ar", "48000", str(audio_wav)]
                     subprocess.run(cmd, check=True)
-                    # Use defaults that match encoder defaults
-                    # Optional params from form
+
                     d_fd = request.form.get("decode_frame_duration") or ""
                     d_cf = request.form.get("decode_compare_fraction") or ""
                     d_header = request.form.get("decode_header_bits") or ""
                     d_footer = request.form.get("decode_footer_bits") or ""
+
                     kwargs = {}
                     if d_fd:
-                        try:
-                            kwargs["frame_duration"] = float(d_fd)
-                        except ValueError:
-                            pass
+                        try: kwargs["frame_duration"] = float(d_fd)
+                        except ValueError: pass
                     if d_cf:
-                        try:
-                            kwargs["compare_fraction"] = float(d_cf)
-                        except ValueError:
-                            pass
-                    if d_header:
-                        # Check if header is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
-                        is_valid_length = len(d_header) >= 16 and len(d_header) % 8 == 0
-                        is_valid_content = all(c in "01" for c in d_header)
-                        
-                        if is_valid_length and is_valid_content:
-                            kwargs["header_bits"] = [int(b) for b in d_header]
-                        else:
-                            if not is_valid_length:
-                                flash(f"Header must be at least 16 characters long and divisible by 8 (got {len(d_header)}). Using default header.", "warning")
-                            else:
-                                flash("Header must contain only 0 and 1. Using default header.", "warning")
-                    if d_footer:
-                        # Check if footer is valid: at least 16 chars, divisible by 8, and contains only 0 and 1
-                        is_valid_length = len(d_footer) >= 16 and len(d_footer) % 8 == 0
-                        is_valid_content = all(c in "01" for c in d_footer)
-                        
-                        if is_valid_length and is_valid_content:
-                            kwargs["footer_bits"] = [int(b) for b in d_footer]
-                        else:
-                            if not is_valid_length:
-                                flash(f"Footer must be at least 16 characters long and divisible by 8 (got {len(d_footer)}). Using default footer.", "warning")
-                            else:
-                                flash("Footer must contain only 0 and 1. Using default footer.", "warning")
-                    decoded = decode_audio_stego(str(audio_wav), **kwargs)
-                    # Decrypt the extracted ciphertext
-                    enc_module = load_module_from_path(
-                        "encrypt_module",
-                        BASE_DIR / "encypt functions" / "encrypt.py",
-                    )
-                    decrypt_message = getattr(enc_module, "decrypt_message")
-                    # Handle both string and bytes from video decoder
-                    try:
-                        if isinstance(decoded, str):
-                            # Already a string, decrypt it (handle encoding errors)
-                            try:
-                                decoded_message = decrypt_message(password, decoded.encode('utf-8'))
-                            except UnicodeEncodeError:
-                                # String contains invalid UTF-8, treat as bytes
-                                decoded_message = decrypt_message(password, decoded.encode('utf-8', errors='replace'))
-                        elif isinstance(decoded, bytes):
-                            # Raw bytes, decrypt directly
-                            decoded_message = decrypt_message(password, decoded)
-                        else:
-                            decoded_message = None
-                    except Exception:
-                        # Most likely parameter mismatch (e.g., wrong frame duration or header/footer)
-                        flash(
-                            "There was a problem with the parameters (e.g., frame duration/compare fraction/header/footer). Please try again.",
-                            "error",
-                        )
-                        return redirect(url_for("index"))
+                        try: kwargs["compare_fraction"] = float(d_cf)
+                        except ValueError: pass
+                    if d_header and len(d_header) >= 16 and len(d_header) % 8 == 0 and all(c in "01" for c in d_header):
+                        kwargs["header_bits"] = [int(b) for b in d_header]
+                    if d_footer and len(d_footer) >= 16 and len(d_footer) % 8 == 0 and all(c in "01" for c in d_footer):
+                        kwargs["footer_bits"] = [int(b) for b in d_footer]
+
+                    raw = video_audio_decoder.decode_audio_stego(str(audio_wav), **kwargs)
+                    decoded_message = encrypt_module.decrypt_message(password, raw if isinstance(raw, bytes) else raw.encode("utf-8", errors="replace"))
+
             elif ext in {"txt", "css", "html"}:
-                ws_module = load_module_from_path(
-                    "mainWhiteS",
-                    BASE_DIR / "encypt functions" / "whitespace" / "mainWhiteS.py",
-                )
-                extract_message = getattr(ws_module, "extract_message")
-                enc_module = load_module_from_path(
-                    "encrypt_module",
-                    BASE_DIR / "encypt functions" / "encrypt.py",
-                )
-                decrypt_message = getattr(enc_module, "decrypt_message")
-                encrypted = extract_message(str(input_path))
-                decoded_message = decrypt_message(password, encrypted)
+                # Complete helper for whitespace
+                decoded_message = mainWhiteS.decode_file(str(input_path), password)
+
             elif ext == "wav":
-                # WAV decode (module returns plaintext when password provided)
-                wav_module = load_module_in_package(
-                    package_name="lsb",
-                    module_name="lsb_wav",
-                    module_path=BASE_DIR / "encypt functions" / "lsb" / "lsb_wav.py",
-                    package_dir=BASE_DIR / "encypt functions" / "lsb",
-                )
-                decode_wav = getattr(wav_module, "decode_message")
-                n_lsb_str = request.form.get("decode_wav_n_lsb") or ""
-                n_lsb = 1
+                d_n_lsb_str = request.form.get("decode_wav_n_lsb") or "1"
                 try:
-                    if n_lsb_str:
-                        n_lsb = max(1, min(3, int(n_lsb_str)))
+                    n_lsb = int(d_n_lsb_str)
+                    if n_lsb not in (1, 2, 3):
+                        raise ValueError
                 except ValueError:
+                    flash("Invalid n_lsb (use 1-3). Defaulted to 1.", "warning")
                     n_lsb = 1
-                decoded_message = decode_wav(
+                decoded_message = lsb_wav.decode_message(
                     stego_audio_path=str(input_path),
                     n_lsb=n_lsb,
                     save_to_file=False,
                     password=password,
                 )
             else:
-                flash("Unsupported file type for decoding.", "error")
+                flash("Unsupported file type.", "error")
                 return redirect(url_for("index"))
 
-            if decoded_message is None:
-                flash("Decoding failed or message empty. Check password/parameters.", "error")
+            if not decoded_message:
+                flash("Decoding failed or message empty.", "error")
+            elif any(ord(c) < 32 and c not in ("\n", "\r", "\t") for c in decoded_message):
+                flash(f"Decoded message (possibly wrong password): {decoded_message}", "error")
             else:
-                # Check if the message appears garbled (wrong password)
-                if is_garbled_text(decoded_message):
-                    flash(f"Decoded message (wrong password?): {decoded_message}", "error")
-                else:
-                    flash(f"Decoded message: {decoded_message}", "success")
+                flash(f"Decoded message: {decoded_message}", "success")
+
         except Exception as e:
             flash(f"Decoding failed: {e}", "error")
         finally:
-            if temp_dir:
-                try:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-                except Exception:
-                    pass
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         return redirect(url_for("index"))
 
@@ -559,6 +358,7 @@ def create_app() -> Flask:
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+
 
 

@@ -33,10 +33,11 @@ def whitespace_to_binary(ws: str) -> str:
 
 # === Embedding ===
 
-def embed_message(input_file: str, output_file: str, secret: str):
+def embed_message(input_file: str, output_file: str, secret: str) -> bool:
     """
     Embed the plaintext secret into the host file by appending
     one space/tab character at the end of each line.
+    Returns True on success, False if capacity is insufficient.
     """
     binary = text_to_binary(secret)
     whitespace = binary_to_whitespace(binary)
@@ -46,7 +47,7 @@ def embed_message(input_file: str, output_file: str, secret: str):
 
     if len(whitespace) > len(lines):
         print(f"Error: Not enough lines in host file ({len(lines)} lines for {len(whitespace)} bits).")
-        return
+        return False
 
     for i in range(len(whitespace)):
         lines[i] = lines[i].rstrip('\r\n') + whitespace[i] + os.linesep
@@ -55,6 +56,7 @@ def embed_message(input_file: str, output_file: str, secret: str):
         f.writelines(lines)
 
     print(f"Message successfully embedded into {output_file}")
+    return True
 
 
 # === Extraction ===
@@ -115,3 +117,22 @@ if __name__ == "__main__":
 
     else:
         print("Error: Invalid choice.")
+
+# === High-level helpers (encryption + stego) ===
+from stego import encrypt as encrypt_module
+
+def encode_file(input_file: str, output_file: str, message: str, password: str) -> bool:
+    """
+    Encrypts 'message' with 'password' and embeds it into the input file.
+    Returns True on success, False if capacity is insufficient.
+    """
+    ciphertext = encrypt_module.encrypt_message(password, message)
+    return embed_message(input_file, output_file, ciphertext)
+
+def decode_file(stego_file: str, password: str) -> str:
+    """
+    Extracts and decrypts the hidden message from stego_file.
+    Returns a plaintext string (empty string if nothing found).
+    """
+    encrypted = extract_message(stego_file)
+    return encrypt_module.decrypt_message(password, encrypted)

@@ -8,10 +8,10 @@ def encrypt_message(password: str, message: str) -> str:
     Encrypts a message using AES-256 with a password-based key.
     Returns the result as a base64 string (includes salt and IV for decryption).
     """
-    # הגדרת פרמטרים
-    salt = get_random_bytes(16)  # מלח לאבטחת ה־Key derivation
-    iv = get_random_bytes(16)    # וקטור אתחול עבור AES
-    key = PBKDF2(password, salt, dkLen=32, count=100000)  # יצירת מפתח בגודל 256 ביט
+    
+    salt = get_random_bytes(16)
+    iv = get_random_bytes(16)
+    key = PBKDF2(password, salt, dkLen=32, count=100000)
 
     # ריפוד ההודעה לפי AES (בלוקים של 16 בתים)
     pad = lambda s: s + (16 - len(s) % 16) * chr(16 - len(s) % 16)
