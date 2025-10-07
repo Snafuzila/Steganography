@@ -7,6 +7,7 @@ import math
 import argparse
 from dataclasses import dataclass
 from typing import Optional
+from stego.utils.bit_utils import bytes_to_bits
 
 """
 This script embeds a secret message into the audio track of a video file using steganography techniques.
@@ -32,16 +33,6 @@ Usage:
 
 # DEFAULT MESSAGE: used when --message is omitted or when message=None in function calls.
 SECRET_MESSAGE = "Message to test"
-
-# Convert a byte sequence (or string) to a list of bits (0/1)
-def bytes_to_bits(byteseq):
-    if isinstance(byteseq, str):
-        byteseq = byteseq.encode()
-    bits = []
-    for b in byteseq:
-        for i in range(7, -1, -1):
-            bits.append((b >> i) & 1)
-    return bits
 
 # Try to find a frame size that can accommodate the required bits, halving if needed.
 def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float, required_bits: int, min_frame_size: int = 150) -> tuple[bool, int, float, int]:

@@ -4,6 +4,7 @@
 # located at the root of the project (next to encrypt_functions).
 
 import os
+from stego.utils.bit_utils import text_to_binstr, binstr_to_text
 
 # === Base paths ===
 # __file__ = current file location (whitespace/mainWhiteS.py)
@@ -15,19 +16,15 @@ EXAMPLES_DIR = os.path.join(BASE_DIR, "examples")
 # === Conversion helpers ===
 
 def text_to_binary(text: str) -> str:
-    """Convert text string to a binary string (0/1), 8 bits per character."""
-    return ''.join(format(ord(c), '08b') for c in text)
+    return text_to_binstr(text)
 
 def binary_to_text(binary: str) -> str:
-    """Convert a binary string back to text (must be multiple of 8 bits)."""
-    return ''.join(chr(int(binary[i:i+8], 2)) for i in range(0, len(binary), 8))
+    return binstr_to_text(binary)
 
 def binary_to_whitespace(binary: str) -> str:
-    """Map binary digits to whitespace: '0' -> space, '1' -> tab."""
     return ''.join(' ' if b == '0' else '\t' for b in binary)
 
 def whitespace_to_binary(ws: str) -> str:
-    """Map whitespace characters back to binary: space -> '0', tab -> '1'."""
     return ''.join('0' if c == ' ' else '1' for c in ws if c in [' ', '\t'])
 
 

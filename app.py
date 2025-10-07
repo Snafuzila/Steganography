@@ -57,27 +57,10 @@ def create_app() -> Flask:
     for d in (UPLOADS_DIR, OUTPUTS_DIR, TEMPLATES_DIR, STATIC_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    # --- Whitespace helpers (kept simple) ---
-    """
-    def _text_to_binary(text: str) -> str:
-        return ''.join(format(ord(c), '08b') for c in text)
-
-    def _binary_to_text(binary: str) -> str:
-        return ''.join(chr(int(binary[i:i+8], 2)) for i in range(0, len(binary), 8))
-    """
-
-    def is_garbled_text(text: str) -> bool:
-        if not text:
-            return False
-        # Count non-printable and replacement characters
-        garbled = sum(1 for c in text if ord(c) < 32 or c == '\ufffd')
-        # If more than 30% of characters are garbled, likely wrong password
-        return garbled / len(text) > 0.3
-
     @app.context_processor
     def inject_globals():
         return {
-            "allowed_options": ALLOWED_OPTIONS,  # UPDATED: used by template
+            "allowed_options": ALLOWED_OPTIONS, 
         }
 
     def allowed_file(filename: str) -> bool:
@@ -100,7 +83,7 @@ def create_app() -> Flask:
         message = request.form.get("message") or ""
         uploaded = request.files.get("upload_file")
 
-        # UPDATED: validate against grouped choices
+        # Validations of inputs
         if not chosen_type or chosen_type not in SELECT_CHOICES:
             flash("Please choose a valid file type.", "error")
             return redirect(url_for("index"))
@@ -262,7 +245,7 @@ def create_app() -> Flask:
         password = request.form.get("decode_password") or ""
         uploaded = request.files.get("decode_upload_file")
 
-        # UPDATED: validate against grouped choices
+        # Validate against grouped choices
         if not chosen_type or chosen_type not in SELECT_CHOICES:
             flash("Please choose a valid file type.", "error")
             return redirect(url_for("index"))
@@ -280,16 +263,15 @@ def create_app() -> Flask:
         uploaded.save(str(input_path))
 
         ext = input_path.suffix.lower().lstrip(".")
-        # UPDATED: ensure selected group matches uploaded file extension
+        # Ensure selected group matches uploaded file extension
         if ext not in CHOICE_TO_EXTS[chosen_type]:
             shutil.rmtree(temp_dir, ignore_errors=True)
             flash("Selected type and file do not match.", "error")
             return redirect(url_for("index"))
 
         try:
-            # Branch by actual extension (unchanged)
+            # Branch by actual extension
             if ext in {"png", "bmp"}:
-                # Complete helper (extract + decrypt)
                 decoded_message = lsb_img.decode_file(str(input_path), password)
 
             elif ext in {"avi", "mkv", "mov"}:
