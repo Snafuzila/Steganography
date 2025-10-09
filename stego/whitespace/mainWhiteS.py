@@ -1,25 +1,12 @@
-# mainWhiteS.py
-# Whitespace steganography (spaces and tabs).
-# All input/output files are taken from and saved into the "examples" folder,
-# located at the root of the project (next to encrypt_functions).
-
 import os
 from stego.utils.bit_utils import text_to_binstr, binstr_to_text
+from stego.utils import encrypt as encrypt_module
 
-# === Base paths ===
-# __file__ = current file location (whitespace/mainWhiteS.py)
-# dirname() 3 times = go up to "Steganography"
+# Whitespace steganography (spaces and tabs).
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 EXAMPLES_DIR = os.path.join(BASE_DIR, "examples")
 
-
 # === Conversion helpers ===
-
-def text_to_binary(text: str) -> str:
-    return text_to_binstr(text)
-
-def binary_to_text(binary: str) -> str:
-    return binstr_to_text(binary)
 
 def binary_to_whitespace(binary: str) -> str:
     return ''.join(' ' if b == '0' else '\t' for b in binary)
@@ -36,7 +23,7 @@ def embed_message(input_file: str, output_file: str, secret: str) -> bool:
     one space/tab character at the end of each line.
     Returns True on success, False if capacity is insufficient.
     """
-    binary = text_to_binary(secret)
+    binary = text_to_binstr(secret)
     whitespace = binary_to_whitespace(binary)
 
     with open(input_file, 'r', encoding='utf-8', newline='') as f:
@@ -54,7 +41,6 @@ def embed_message(input_file: str, output_file: str, secret: str) -> bool:
 
     print(f"Message successfully embedded into {output_file}")
     return True
-
 
 # === Extraction ===
 
@@ -76,47 +62,9 @@ def extract_message(stego_file: str) -> str:
             bits += '0' if last_char == ' ' else '1'
 
     bits = bits[:len(bits) - (len(bits) % 8)]
-    return binary_to_text(bits)
-
-
-# === CLI ===
-
-if __name__ == "__main__":
-    print("Choose:")
-    print("1. Embed message")
-    print("2. Extract message")
-    choice = input("> ").strip()
-
-    if choice == '1':
-        input_file = input("Enter host file name (with extension, inside 'examples'): ").strip()
-        output_file = input("Enter stego output file name (with extension, inside 'examples'): ").strip()
-
-        # Build full paths inside examples/
-        input_path = os.path.join(EXAMPLES_DIR, input_file)
-        output_path = os.path.join(EXAMPLES_DIR, output_file)
-
-        secret = input("Enter message to hide: ")
-        embed_message(input_path, output_path, secret)
-
-    elif choice == '2':
-        stego_file = input("Enter stego file name (with extension, inside 'examples'): ").strip()
-
-        # Build full path inside examples/
-        stego_path = os.path.join(EXAMPLES_DIR, stego_file)
-
-        message = extract_message(stego_path)
-
-        if message:
-            print("\nSuccess! Hidden message:")
-            print(message)
-        else:
-            print("\nError: No hidden data found.")
-
-    else:
-        print("Error: Invalid choice.")
+    return binstr_to_text(bits)
 
 # === High-level helpers (encryption + stego) ===
-from stego import encrypt as encrypt_module
 
 def encode_file(input_file: str, output_file: str, message: str, password: str) -> bool:
     """

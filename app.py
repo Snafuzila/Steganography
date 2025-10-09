@@ -10,7 +10,7 @@ from typing import Optional
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 
-from stego import encrypt as encrypt_module
+from stego.utils import encrypt as encrypt_module
 from stego.lsb import lsb_img, lsb_wav
 from stego.sample_comparison import video_audio_encoder, video_audio_decoder
 from stego.whitespace import mainWhiteS
@@ -196,7 +196,7 @@ def create_app() -> Flask:
                 ciphertext = encrypt_module.encrypt_message(password, message)
                 with open(input_path, 'r', encoding='utf-8', newline='') as f:
                     lines = f.readlines()
-                needed_bits = len(mainWhiteS.text_to_binary(ciphertext))
+                needed_bits = len(mainWhiteS.text_to_binstr(ciphertext))
                 if needed_bits > len(lines):
                     flash(f"Not enough lines (have {len(lines)}, need {needed_bits}).", "error")
                     return redirect(url_for("index"))
@@ -298,7 +298,19 @@ def create_app() -> Flask:
                         kwargs["footer_bits"] = [int(b) for b in d_footer]
 
                     raw = video_audio_decoder.decode_audio_stego(str(audio_wav), **kwargs)
-                    decoded_message = encrypt_module.decrypt_message(password, raw if isinstance(raw, bytes) else raw.encode("utf-8", errors="replace"))
+
+                    # Graceful handling of wrong params/password (raw missing or decrypt fails)
+                    if raw in (None, b"", ""):
+                        flash("Decoding failed - Wrong parameters or password were provided", "error")
+                        return redirect(url_for("index"))
+                    try:
+                        decoded_message = encrypt_module.decrypt_message(
+                            password,
+                            raw if isinstance(raw, bytes) else raw.encode("utf-8", errors="replace")
+                        )
+                    except Exception:
+                        flash("Decoding failed - Wrong parameters or password were provided", "error")
+                        return redirect(url_for("index"))
 
             elif ext in {"txt", "css", "html"}:
                 # Complete helper for whitespace

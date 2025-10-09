@@ -1,5 +1,5 @@
 from PIL import Image  # Pillow library to handle images
-from stego import encrypt as encrypt_module
+from stego.utils import encrypt as encrypt_module
 from stego.utils.bit_utils import (
     text_to_binstr,
     binstr_to_text,
@@ -7,13 +7,12 @@ from stego.utils.bit_utils import (
 )
 
 def lsb_img_hide_text_with_length(image: Image.Image, message: str) -> Image.Image:
-    # img = Image.open(image_path)  # we uncomment this line if we want to change the input to path, then the line open the input image
 
     # Make sure image is in RGB mode (not RGBA, grayscale, etc.)
     if image.mode != 'RGB':
         image = image.convert('RGB')
 
-    binary_message = text_to_binstr(message)  # unified helper
+    binary_message = text_to_binstr(message) 
 
     # Calculate message length in bits and create a 32-bit binary header
     message_length = len(binary_message)
@@ -29,19 +28,19 @@ def lsb_img_hide_text_with_length(image: Image.Image, message: str) -> Image.Ima
     total_bits = len(full_binary)  # Total number of bits to embed
 
     for pixel in pixels:
-        if data_index >= total_bits:
-            # No more bits to embed, just copy the pixel
+        if data_index >= total_bits:  # No more bits to embed, just copy the pixel
             new_pixels.append(pixel)
             continue
 
-        # Unpack RGB values. we converted to RGB mode, so there shouldn't be alpha channel.
+        # Unpack RGB values. There shouldn't be an alpha channel.
         r, g, b = pixel  
 
         # For each color channel, replace the least significant bit
         if data_index < total_bits:
             r = (r & ~1) | int(full_binary[data_index])
             # Clear LSB and set it. (r & ~1) clear the last bit. then there is '|' or
-            # operator if message bit is one it puts 1 there, we get from full_binary a char and so we also convert to int.  
+            # operator if message bit is one it puts 1 there,
+            # we get from full_binary a char and so we also convert to int.
             data_index += 1
         if data_index < total_bits:
             g = (g & ~1) | int(full_binary[data_index])
@@ -63,7 +62,7 @@ def lsb_img_hide_text_with_length(image: Image.Image, message: str) -> Image.Ima
     return new_img  # Return the new image (not saved to file yet)
 
 
-# Function to extract the hidden message from the image
+# Extract the hidden message from the image
 def lsb_img_extract_text_from_image(image: Image.Image) -> str:
     # Make sure the image is in RGB mode
     if image.mode != 'RGB':
