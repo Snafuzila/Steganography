@@ -1,9 +1,11 @@
 import os
 import sys
+from dataclasses import dataclass
+from typing import Optional
 import tempfile
 import subprocess
-import numpy as np
 import scipy.io.wavfile as wav
+from stego.utils import encrypt as encrypt_module
 
 """
 This script decodes a message hidden in the audio of a video file using steganography techniques.
@@ -110,6 +112,81 @@ def decode_audio_stego(
         message = message_bytes
     print(f"Decoded message: {message}")
     return message
+
+class WrongParamsOrPassword(Exception):
+    """Raised when provided parameters or password are wrong during video decode."""
+    pass
+
+def _normalize_bits_param(bits_str: Optional[str]) -> Optional[list[int]]:
+    """Validate a bit-string (>=16, multiple of 8, only 0/1). Return list[int] or None if invalid/empty."""
+    if not bits_str:
+        return None
+    s = bits_str.strip()
+    if len(s) >= 16 and len(s) % 8 == 0 and all(c in "01" for c in s):
+        return [int(b) for b in s]
+    return None
+
+@dataclass
+class VideoDecodeOptions:
+    frame_duration: Optional[float] = None
+    compare_fraction: Optional[float] = None
+    header_bits: Optional[str] = None
+    footer_bits: Optional[str] = None
+
+@dataclass
+class VideoDecodeResult:
+    message: str  # decrypted plaintext
+
+def decode_video_message(
+    input_video: str,
+    password: str,
+    options: Optional[VideoDecodeOptions] = None,
+) -> VideoDecodeResult:
+    """
+    High-level API: extract audio via ffmpeg, decode embedded payload with the
+    low-level decoder, then decrypt with the given password.
+    Raises WrongParamsOrPassword if payload not found or decryption fails.
+    """
+    # Build kwargs for the low-level decoder
+    kwargs = {}
+    if options:
+        if options.frame_duration is not None:
+            try:
+                kwargs["frame_duration"] = float(options.frame_duration)
+            except Exception:
+                pass
+        if options.compare_fraction is not None:
+            try:
+                kwargs["compare_fraction"] = float(options.compare_fraction)
+            except Exception:
+                pass
+        hb = _normalize_bits_param(options.header_bits)
+        fb = _normalize_bits_param(options.footer_bits)
+        if hb is not None:
+            kwargs["header_bits"] = hb
+        if fb is not None:
+            kwargs["footer_bits"] = fb
+
+    # Extract audio track to temp WAV
+    with tempfile.TemporaryDirectory() as tmpdir:
+        audio_wav = f"{tmpdir}/audio.wav"
+        cmd = ["ffmpeg", "-y", "-i", input_video, "-vn", "-acodec", "pcm_s16le", "-ar", "48000", audio_wav]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Call existing low-level decoder in this module
+        raw = decode_audio_stego(audio_wav, **kwargs)  # noqa: F821
+
+    # If nothing decoded, or decryption fails, raise a unified error
+    if not raw:
+        raise WrongParamsOrPassword("No payload found with provided parameters.")
+
+    enc_text = raw.decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+    try:
+        plaintext = encrypt_module.decrypt_message(password, enc_text)
+    except Exception:
+        raise WrongParamsOrPassword("Decrypt failed.")
+
+    return VideoDecodeResult(message=plaintext)
 
 def main():
     import argparse

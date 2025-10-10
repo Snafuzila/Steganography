@@ -5,9 +5,10 @@ import numpy as np
 import scipy.io.wavfile as wav
 import math
 import argparse
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
 from stego.utils.bit_utils import bytes_to_bits
+from stego.utils import encrypt as encrypt_module
 
 """
 This script embeds a secret message into the audio track of a video file using steganography techniques.
@@ -115,6 +116,13 @@ _DEFAULT_HEADER = "1010101010101010"
 _DEFAULT_FOOTER = "0101010101010101"
 
 @dataclass
+class VideoEncodeOptions:
+    frame_duration: Optional[float] = None
+    compare_fraction: Optional[float] = None
+    header_bits: Optional[str] = None
+    footer_bits: Optional[str] = None
+
+@dataclass
 class EncodeResult:
     output_path: str
     frame_size: int
@@ -131,6 +139,7 @@ class EncodeResult:
     max_bits: int
     sample_rate: int
     total_samples: int
+    warnings: List[str] = field(default_factory=list)
 
 def encode_message_in_video_details(
     input_video: str,
@@ -228,7 +237,68 @@ def encode_message_in_video_details(
         max_bits=max_bits,
         sample_rate=sr,
         total_samples=total_samples,
+        warnings=[],  # none at this level
     )
+
+def encode_video_message(
+    input_video: str,
+    output_video: Optional[str],
+    plaintext_message: str,
+    password: str,
+    options: Optional[VideoEncodeOptions] = None,
+) -> EncodeResult:
+    """
+    High-level API: encrypts plaintext_message with password,
+    validates/normalizes options, and returns structured result.
+    """
+    # Defaults
+    fd = _DEFAULT_FRAME_DURATION
+    cf = _DEFAULT_COMPARE_FRACTION
+    header = _DEFAULT_HEADER
+    footer = _DEFAULT_FOOTER
+    warnings: List[str] = []
+
+    # Normalize options if provided
+    if options:
+        if options.frame_duration is not None:
+            try:
+                fd = float(options.frame_duration)
+            except Exception:
+                warnings.append("Invalid frame_duration; using default.")
+        if options.compare_fraction is not None:
+            try:
+                cf = float(options.compare_fraction)
+            except Exception:
+                warnings.append("Invalid compare_fraction; using default.")
+        if options.header_bits:
+            hb = options.header_bits.strip()
+            if len(hb) >= 16 and len(hb) % 8 == 0 and all(c in "01" for c in hb):
+                header = hb
+            else:
+                warnings.append("Invalid header; using default.")
+        if options.footer_bits:
+            fb = options.footer_bits.strip()
+            if len(fb) >= 16 and len(fb) % 8 == 0 and all(c in "01" for c in fb):
+                footer = fb
+            else:
+                warnings.append("Invalid footer; using default.")
+
+    # Encrypt the plaintext here (keeps app simple and consistent with other encoders)
+    ciphertext = encrypt_module.encrypt_message(password, plaintext_message)
+
+    # Call the detailed encoder with the encrypted payload
+    res = encode_message_in_video_details(
+        input_video=input_video,
+        output_video=output_video,
+        message=ciphertext,
+        frame_duration=fd,
+        compare_fraction=cf,
+        header=header,
+        footer=footer,
+    )
+    # Attach any normalization warnings
+    res.warnings.extend(warnings)
+    return res
 
 def encode_message_in_video(
     input_video: str,

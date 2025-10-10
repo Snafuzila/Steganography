@@ -12,7 +12,8 @@ from werkzeug.utils import secure_filename
 
 from stego.utils import encrypt as encrypt_module
 from stego.lsb import lsb_img, lsb_wav
-from stego.sample_comparison import video_audio_encoder, video_audio_decoder
+from stego.sample_comparison.video_audio_encoder import VideoEncodeOptions, encode_video_message
+from stego.sample_comparison.video_audio_decoder import VideoDecodeOptions, decode_video_message, WrongParamsOrPassword
 from stego.whitespace import mainWhiteS
 
 
@@ -131,43 +132,24 @@ def create_app() -> Flask:
                 header_bits = request.form.get("header_bits") or ""
                 footer_bits = request.form.get("footer_bits") or ""
 
-                kwargs = {}
-                if fd_str:
-                    try:
-                        kwargs["frame_duration"] = float(fd_str)
-                    except ValueError:
-                        pass
-                if cf_str:
-                    try:
-                        kwargs["compare_fraction"] = float(cf_str)
-                    except ValueError:
-                        pass
+                opts = VideoEncodeOptions(
+                    frame_duration=float(fd_str) if fd_str else None,
+                    compare_fraction=float(cf_str) if cf_str else None,
+                    header_bits=header_bits or None,
+                    footer_bits=footer_bits or None,
+                )
 
-                header_warning = footer_warning = None
-                if header_bits:
-                    valid_len = len(header_bits) >= 16 and len(header_bits) % 8 == 0
-                    valid_chars = all(c in "01" for c in header_bits)
-                    if valid_len and valid_chars:
-                        kwargs["header"] = header_bits
-                    else:
-                        header_warning = "Invalid header; using default."
-                if footer_bits:
-                    valid_len = len(footer_bits) >= 16 and len(footer_bits) % 8 == 0
-                    valid_chars = all(c in "01" for c in footer_bits)
-                    if valid_len and valid_chars:
-                        kwargs["footer"] = footer_bits
-                    else:
-                        footer_warning = "Invalid footer; using default."
-
-                res = video_audio_encoder.encode_message_in_video_details(
-                    str(input_path),
-                    str(output_path),
-                    message=encrypt_module.encrypt_message(password, message),
-                    **kwargs
+                # Handle encryption, ffmpeg extraction, embedding and muxing
+                res = encode_video_message(
+                    input_video=str(input_path),
+                    output_video=str(output_path),
+                    plaintext_message=message,
+                    password=password,
+                    options=opts,
                 )
                 output_path = Path(res.output_path)
 
-                # Only show params that are not DEFAULT
+                # Build details (only non-default values; frame info always)
                 details = []
                 if res.header_display != "DEFAULT":
                     details.append(f"header={res.header_display}")
@@ -175,14 +157,12 @@ def create_app() -> Flask:
                     details.append(f"footer={res.footer_display}")
                 if res.compare_fraction_display != "DEFAULT":
                     details.append(f"compare_fraction={res.compare_fraction_display}")
-                # Always show frame info
                 details += [
                     f"frame_size={res.frame_size}",
                     f"frame_duration_used={res.frame_duration:.8f}",
                 ]
-                warnings = [w for w in (header_warning, footer_warning) if w]
-                if warnings:
-                    details.append("Warnings: " + "; ".join(warnings))
+                if res.warnings:
+                    details.append("Warnings:\n- " + "\n- ".join(res.warnings))
 
                 msg = "Encoded file created: " + output_path.name
                 if details:
@@ -275,42 +255,29 @@ def create_app() -> Flask:
                 decoded_message = lsb_img.decode_file(str(input_path), password)
 
             elif ext in {"avi", "mkv", "mov"}:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    audio_wav = Path(tmpdir) / "audio.wav"
-                    cmd = ["ffmpeg", "-y", "-i", str(input_path), "-vn", "-acodec", "pcm_s16le", "-ar", "48000", str(audio_wav)]
-                    subprocess.run(cmd, check=True)
+                d_fd = request.form.get("decode_frame_duration") or ""
+                d_cf = request.form.get("decode_compare_fraction") or ""
+                d_header = request.form.get("decode_header_bits") or ""
+                d_footer = request.form.get("decode_footer_bits") or ""
 
-                    d_fd = request.form.get("decode_frame_duration") or ""
-                    d_cf = request.form.get("decode_compare_fraction") or ""
-                    d_header = request.form.get("decode_header_bits") or ""
-                    d_footer = request.form.get("decode_footer_bits") or ""
+                d_opts = VideoDecodeOptions(
+                    frame_duration=float(d_fd) if d_fd else None,
+                    compare_fraction=float(d_cf) if d_cf else None,
+                    header_bits=d_header or None,
+                    footer_bits=d_footer or None,
+                )
 
-                    kwargs = {}
-                    if d_fd:
-                        try: kwargs["frame_duration"] = float(d_fd)
-                        except ValueError: pass
-                    if d_cf:
-                        try: kwargs["compare_fraction"] = float(d_cf)
-                        except ValueError: pass
-                    if d_header and len(d_header) >= 16 and len(d_header) % 8 == 0 and all(c in "01" for c in d_header):
-                        kwargs["header_bits"] = [int(b) for b in d_header]
-                    if d_footer and len(d_footer) >= 16 and len(d_footer) % 8 == 0 and all(c in "01" for c in d_footer):
-                        kwargs["footer_bits"] = [int(b) for b in d_footer]
-
-                    raw = video_audio_decoder.decode_audio_stego(str(audio_wav), **kwargs)
-
-                    # Graceful handling of wrong params/password (raw missing or decrypt fails)
-                    if raw in (None, b"", ""):
-                        flash("Decoding failed - Wrong parameters or password were provided", "error")
-                        return redirect(url_for("index"))
-                    try:
-                        decoded_message = encrypt_module.decrypt_message(
-                            password,
-                            raw if isinstance(raw, bytes) else raw.encode("utf-8", errors="replace")
-                        )
-                    except Exception:
-                        flash("Decoding failed - Wrong parameters or password were provided", "error")
-                        return redirect(url_for("index"))
+                try:
+                    # One simple call handles ffmpeg extraction, decoding and decryption
+                    res = decode_video_message(
+                        input_video=str(input_path),
+                        password=password,
+                        options=d_opts,
+                    )
+                    decoded_message = res.message
+                except WrongParamsOrPassword:
+                    flash("Decoding failed - Wrong parameters or password were provided", "error")
+                    return redirect(url_for("index"))
 
             elif ext in {"txt", "css", "html"}:
                 # Complete helper for whitespace
