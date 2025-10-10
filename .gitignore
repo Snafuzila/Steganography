@@ -1,7 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
@@ -53,4 +52,6 @@ password.txt
 # Ignore Python cache
 __pycache__/
 
-סטגנוגרפיה/
+# OS junk
+.DS_Store
+Thumbs.db

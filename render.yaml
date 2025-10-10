@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: steganography
+    env: python
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -k gthread --threads 8 -b 0.0.0.0:$PORT wsgi:app
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      # Optional: increase worker timeouts for long video work
+      - key: GUNICORN_CMD_ARGS
+        value: "--timeout 180"
+    # Optional persistent disk for outputs (uncomment if you want files kept across deploys)
+    # disk:
+    #   name: outputs
+    #   mountPath: /opt/render/project/src/outputs
+    #   sizeGB: 1
