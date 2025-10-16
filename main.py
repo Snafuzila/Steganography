@@ -1,4 +1,5 @@
-# main_stego.py abc
+# main_stego.py abcd
+
 # Main script for steganography project integrating image, audio, video, and text hiding methods.
 # Uses encryption from encrypt.py for all methods.
 # Inputs from 'examples' directory, outputs to 'outputs' directory.
