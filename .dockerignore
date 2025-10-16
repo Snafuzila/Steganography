@@ -1,0 +1,16 @@
+.git
+__pycache__/
+*.pyc
+.env
+outputs/
+uploads/
+*.mov
+*.mkv
+*.avi
+*.wav
+*.bmp
+*.png
+*.flac
+*.enc
+*.secret
+*.steg

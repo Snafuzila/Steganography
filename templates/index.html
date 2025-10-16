@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>StegX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <h1>StegX</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, msg in messages %}
+            <div class="flash {{ category }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="grid">
+      <!-- ENCODE -->
+      <section class="card">
+        <h2>Encrypt / Embed</h2>
+        <form action="{{ url_for('encode') }}" method="post" enctype="multipart/form-data" id="encode_form">
+
+          <!-- File first -->
+          <div class="field">
+            <label for="encode_upload_file">Upload host file</label>
+            <input id="encode_upload_file" type="file" name="upload_file"
+                   accept=".txt,.css,.html,.avi,.mkv,.mov,.png,.bmp,.wav" required />
+            <div class="hint">
+              <span id="encode_file_info"></span>
+              <span class="muted"> — Supported: txt, css, html, video (mov/mkv/avi), image (png/bmp), wav</span>
+            </div>
+            <div id="encode_unsupported" class="flash error" style="display:none;">Unsupported file type</div>
+          </div>
+
+          <!-- Detected type (read-only display) + hidden field for backend -->
+          <input type="hidden" name="file_type" id="file_type" />
+          <div class="field" id="encode_type_row" style="display:none;">
+            <label>Detected type</label>
+            <div id="encode_type_text" class="detected-type"></div>
+          </div>
+
+          <!-- Video params (shown only for video) -->
+          <div id="video_params" style="display:none;">
+            <div class="field">
+              <label>Frame duration (seconds)</label>
+              <input type="text" name="frame_duration" placeholder="0.1" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Compare fraction (0–1)</label>
+              <input type="text" name="compare_fraction" placeholder="0.5" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Header bits (≥16, multiple of 8)</label>
+              <input type="text" name="header_bits" placeholder="1010101010101010" pattern="[01]{16,}" />
+            </div>
+            <div class="field">
+              <label>Footer bits (≥16, multiple of 8)</label>
+              <input type="text" name="footer_bits" placeholder="0101010101010101" pattern="[01]{16,}" />
+            </div>
+          </div>
+
+          <!-- WAV params (shown only for wav) -->
+          <div id="wav_params" style="display:none;">
+            <div class="field">
+              <label>WAV LSBs per sample (1–3)</label>
+              <input type="text" name="wav_n_lsb" placeholder="1" pattern="[1-3]" />
+            </div>
+          </div>
+
+          <!-- Password (always visible) -->
+          <div class="field password-field">
+            <label for="enc_password">Password</label>
+            <input id="enc_password" type="password" name="password" placeholder="Enter password" required />
+            <button type="button" class="toggle-pass" data-target="enc_password" aria-label="Toggle password visibility">👁</button>
+          </div>
+
+          <!-- Message (always visible) -->
+          <div class="field">
+            <label for="enc_message">Message to hide</label>
+            <textarea id="enc_message" name="message" placeholder="Type your secret message" rows="4" required></textarea>
+          </div>
+
+          <div class="actions">
+            <button id="encode_submit" type="submit" disabled>Encrypt</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- DECODE -->
+      <section class="card">
+        <h2>Decrypt / Extract</h2>
+        <form action="{{ url_for('decode') }}" method="post" enctype="multipart/form-data" id="decode_form">
+
+          <!-- File first -->
+          <div class="field">
+            <label for="decode_upload_file">Upload stego file</label>
+            <input id="decode_upload_file" type="file" name="decode_upload_file"
+                   accept=".txt,.css,.html,.avi,.mkv,.mov,.png,.bmp,.wav" required />
+            <div class="hint">
+              <span id="decode_file_info"></span>
+              <span class="muted"> — Supported: txt, css, html, video (mov/mkv/avi), image (png/bmp), wav</span>
+            </div>
+            <div id="decode_unsupported" class="flash error" style="display:none;">Unsupported file type</div>
+          </div>
+
+          <!-- Detected type (read-only display) + hidden field for backend -->
+          <input type="hidden" name="decode_file_type" id="decode_file_type" />
+          <div class="field" id="decode_type_row" style="display:none;">
+            <label>Detected type</label>
+            <div id="decode_type_text" class="detected-type"></div>
+          </div>
+
+          <!-- Video params (shown only for video) -->
+          <div id="decode_video_params" style="display:none;">
+            <div class="field">
+              <label>Frame duration (seconds)</label>
+              <input type="text" name="decode_frame_duration" placeholder="0.1" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Compare fraction (0–1)</label>
+              <input type="text" name="decode_compare_fraction" placeholder="0.5" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Header bits (≥16, multiple of 8)</label>
+              <input type="text" name="decode_header_bits" placeholder="1010101010101010" pattern="[01]{16,}" />
+            </div>
+            <div class="field">
+              <label>Footer bits (≥16, multiple of 8)</label>
+              <input type="text" name="decode_footer_bits" placeholder="0101010101010101" pattern="[01]{16,}" />
+            </div>
+          </div>
+
+          <!-- WAV params (shown only for wav) -->
+          <div id="decode_wav_params" style="display:none;">
+            <div class="field">
+              <label>WAV LSBs per sample (1–3)</label>
+              <input type="text" name="decode_wav_n_lsb" placeholder="1" pattern="[1-3]" />
+            </div>
+          </div>
+
+          <!-- Password (always visible) -->
+          <div class="field password-field">
+            <label for="dec_password">Password</label>
+            <input id="dec_password" type="password" name="decode_password" placeholder="Enter password" />
+            <button type="button" class="toggle-pass" data-target="dec_password" aria-label="Toggle password visibility">👁</button>
+          </div>
+
+          <div class="actions">
+            <button id="decode_submit" type="submit" disabled>Decrypt</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // Map extension -> grouped select value
+    const EXT_TO_GROUP = {
+      txt: 'txt', css: 'css', html: 'html', wav: 'wav',
+      png: 'image', bmp: 'image',
+      avi: 'video', mkv: 'video', mov: 'video',
+    };
+
+    function getExt(fileName) {
+      const i = fileName.lastIndexOf('.');
+      return i >= 0 ? fileName.slice(i + 1).toLowerCase() : '';
+    }
+
+    function toggleEncodeParams() {
+      const v = (document.getElementById('file_type')?.value || '').toLowerCase();
+      const isVideo = v === 'video';
+      const isWav = v === 'wav';
+      document.getElementById('video_params').style.display = isVideo ? '' : 'none';
+      document.getElementById('wav_params').style.display = isWav ? '' : 'none';
+    }
+
+    function toggleDecodeParams() {
+      const v = (document.getElementById('decode_file_type')?.value || '').toLowerCase();
+      const isVideo = v === 'video';
+      const isWav = v === 'wav';
+      document.getElementById('decode_video_params').style.display = isVideo ? '' : 'none';
+      document.getElementById('decode_wav_params').style.display = isWav ? '' : 'none';
+    }
+
+    // ENCODE: auto-detect on file choose
+    (function setupEncodeAutoDetect() {
+      const fileInput = document.getElementById('encode_upload_file');
+      const hiddenType = document.getElementById('file_type');
+      const typeRow = document.getElementById('encode_type_row');
+      const typeText = document.getElementById('encode_type_text');
+      const info = document.getElementById('encode_file_info');
+      const unsupported = document.getElementById('encode_unsupported');
+      const submit = document.getElementById('encode_submit');
+
+      function update() {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          hiddenType.value = '';
+          typeRow.style.display = 'none';
+          unsupported.style.display = 'none';
+          info.textContent = '';
+          submit.disabled = true;
+          document.getElementById('video_params').style.display = 'none';
+          document.getElementById('wav_params').style.display = 'none';
+          return;
+        }
+        const ext = getExt(file.name);
+        info.textContent = file.name;
+        const group = EXT_TO_GROUP[ext] || '';
+        if (!group) {
+          hiddenType.value = '';
+          typeText.textContent = '';
+          unsupported.style.display = '';
+          typeRow.style.display = 'none';
+          submit.disabled = true;
+          document.getElementById('video_params').style.display = 'none';
+          document.getElementById('wav_params').style.display = 'none';
+          return;
+        }
+        unsupported.style.display = 'none';
+        hiddenType.value = group;
+        typeText.textContent = group;
+        typeRow.style.display = '';
+        submit.disabled = false;
+        toggleEncodeParams();
+      }
+
+      fileInput.addEventListener('change', update);
+      update();
+    })();
+
+    // DECODE: auto-detect on file choose
+    (function setupDecodeAutoDetect() {
+      const fileInput = document.getElementById('decode_upload_file');
+      const hiddenType = document.getElementById('decode_file_type');
+      const typeRow = document.getElementById('decode_type_row');
+      const typeText = document.getElementById('decode_type_text');
+      const info = document.getElementById('decode_file_info');
+      const unsupported = document.getElementById('decode_unsupported');
+      const submit = document.getElementById('decode_submit');
+
+      function update() {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          hiddenType.value = '';
+          typeRow.style.display = 'none';
+          unsupported.style.display = 'none';
+          info.textContent = '';
+          submit.disabled = true;
+          document.getElementById('decode_video_params').style.display = 'none';
+          document.getElementById('decode_wav_params').style.display = 'none';
+          return;
+        }
+        const ext = getExt(file.name);
+        info.textContent = file.name;
+        const group = EXT_TO_GROUP[ext] || '';
+        if (!group) {
+          hiddenType.value = '';
+          typeText.textContent = '';
+          unsupported.style.display = '';
+          typeRow.style.display = 'none';
+          submit.disabled = true;
+          document.getElementById('decode_video_params').style.display = 'none';
+          document.getElementById('decode_wav_params').style.display = 'none';
+          return;
+        }
+        unsupported.style.display = 'none';
+        hiddenType.value = group;
+        typeText.textContent = group;
+        typeRow.style.display = '';
+        submit.disabled = false;
+        toggleDecodeParams();
+      }
+
+      fileInput.addEventListener('change', update);
+      update();
+    })();
+
+    // Auto-download after redirect
+    (function autoDownload() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dl = urlParams.get('download');
+      if (dl) {
+        const link = document.createElement('a');
+        link.href = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/download/${encodeURIComponent(dl)}`;
+        link.download = dl;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    })();
+
+    // Password visibility toggles
+    (function(){
+      document.querySelectorAll('.toggle-pass').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-target');
+          const input = document.getElementById(id);
+          if (!input) return;
+          input.type = input.type === 'password' ? 'text' : 'password';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
+
+
