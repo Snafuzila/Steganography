@@ -12,7 +12,7 @@
 
 ## 👥 Team Members
 - Noiman Ron  
-- Konin Daniel  
+- Kunin Daniel  
 - Chayut Dor  
 - Attiya Boaz  
 - Lamay Ofek  
@@ -40,7 +40,7 @@ Build a complete steganographic system that enables **transparent data hiding** 
 
 ### ✅ **Main Goals**
 - Develop dedicated algorithms for **data hiding and extraction**
-- Support the following formats: `PNG`, `BMP`, `WAV`, `FLAC`, `AVI`, `MKV`, `PDF`, `DOCX`
+- Support the following formats: `PNG`, `BMP`, `WAV`, `AVI`, `MKV`, `MOV`, `TEXT`, `HTML`, `CSS`
 - Build an **internal encryption mechanism (AES-256)** to maintain confidentiality
 - Develop a **user-friendly interface** (initially CLI, potentially GUI later)
 - Document all code and algorithms clearly
@@ -62,23 +62,21 @@ Build a complete steganographic system that enables **transparent data hiding** 
 
 ### 📂 **Supported Formats**
 - **Images:** PNG, BMP  
-- **Audio:** WAV, FLAC  
-- **Video:** AVI, MKV  
-- **Text/Documents:** PDF, DOCX
+- **Audio:** WAV  
+- **Video:** AVI, MKV, MOV  
+- **Text/Documents:** TEXT, HTML, CSS  
 
 ### 🧠 **Selected Algorithms**
-- **LSB (Least Significant Bit):** For embedding in images, video, and audio  
-- **Whitespace Steganography:** For hiding text in document formats  
-- **Echo Hiding:** For embedding messages in audio files  
-- **DSS (Direct-Sequence Spread Spectrum):** Hiding information in audio and video signals
+- **LSB (Least Significant Bit):** For embedding in images (`PNG`, `BMP`) and audio (`WAV`)  
+- **Whitespace Steganography:** For hiding text in `TEXT`, `HTML`, `CSS` documents  
+- **Comparison of Samples (השוואת סימפולים):** For embedding in video (`AVI`, `MKV`, `MOV`)
 
 ---
 
 ## 🔮 Future Implementation Recommendations
-- Share code and logic between handling `WAV` and `FLAC` (Echo Hiding)
+- Share code and logic between handling `WAV` and future support for `FLAC` (Echo Hiding)
 - Explore and evaluate existing Python libraries such as `pydub`, `PyPDF2`, `python-docx`
 - Organize the project using **modular structure** – one class/module per format
 - Create **test cases** to validate that the **original content is not altered**
 
 ---
-

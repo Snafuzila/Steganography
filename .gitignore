@@ -1,20 +1,22 @@
-# Byte-compiled / optimized / DLL files
+# Ignore Python cache
 __pycache__/
 *.pyc
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# Environment and dependency folders
+# Virtual env
+.venv/
 env/
 venv/
-.venv/
 
-# MacOS system files
+# OS files
 .DS_Store
+Thumbs.db
 
-# VSCode settings (optional)
+# IDE settings
 .vscode/
+.idea/
 
 # Logs and dumps
 *.log
