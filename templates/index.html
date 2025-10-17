@@ -8,7 +8,16 @@
 </head>
 <body>
   <div class="container">
-    <h1>StegX</h1>
+    <h1>
+      StegX
+      <button
+        id="help_button"
+        class="linklike"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="help_modal"
+      >How it works?</button>
+    </h1>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -159,6 +168,46 @@
     </div>
   </div>
 
+  <!-- Help / How it works modal -->
+  <div id="help_modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="help_title">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-dialog" role="document">
+      <header class="modal-header">
+        <h2 id="help_title">How to use StegX</h2>
+        <button class="modal-close" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body">
+        <p>StegX hides text inside host files (images, audio, video, or text). Use Encrypt/Embed to create a stego file; use Decrypt/Extract to read a hidden message.</p>
+
+        <h3>Encrypt / Embed</h3>
+        <ol>
+          <li>Upload a host file, type is auto-detected.</li>
+          <li>If you chose Video or WAV, extra options appear. Keep default values unless you know what to change.</li>
+          <li>Enter a password and your secret message.</li>
+          <li>Click Encrypt. A new file with the encoded message is created and auto-downloaded.</li>
+          <li>Notice that if there was a change in the given parameters, you may need to keep them for decryption.</li>
+        </ol>
+
+        <h3>Decrypt / Extract</h3>
+        <ol>
+          <li>Upload the steganography file that was produced from encryption.</li>
+          <li>Enter the password used during Encrypt.</li>
+          <li>If needed, provide the same Video/WAV options used to encode.</li>
+          <li>Click Decrypt. The message appears at the top as a notification.</li>
+        </ol>
+
+        <h3>Notes</h3>
+        <ul>
+          <li>Supported hosts: txt, css, html; images (png/bmp); audio (wav); video (avi/mkv/mov).</li>
+          <li>Type is inferred from the file extension; mismatches are rejected.</li>
+          <li>Text (txt/css/html) uses whitespace; capacity is roughly one bit per line.</li>
+          <li>WAV uses LSB embedding (1-3 bits/sample).</li>
+          <li>Video uses audio sampling; wrong params or password will fail decoding.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Map extension -> grouped select value
     const EXT_TO_GROUP = {
@@ -305,6 +354,39 @@
           if (!input) return;
           input.type = input.type === 'password' ? 'text' : 'password';
         });
+      });
+    })();
+
+    // Help modal behavior
+    (function helpModal() {
+      const openBtn = document.getElementById('help_button');
+      const modal = document.getElementById('help_modal');
+      if (!openBtn || !modal) return;
+      const backdrop = modal.querySelector('.modal-backdrop');
+      const closeBtns = modal.querySelectorAll('.modal-close');
+      const focusableSel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+      let lastActive = null;
+
+      function open() {
+        lastActive = document.activeElement;
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        const first = modal.querySelector(focusableSel);
+        first && first.focus();
+      }
+      function close() {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        lastActive && lastActive.focus();
+      }
+      openBtn.addEventListener('click', open);
+      backdrop && backdrop.addEventListener('click', close);
+      closeBtns.forEach(b => b.addEventListener('click', close));
+      document.addEventListener('keydown', (e) => {
+        if (!modal.classList.contains('open')) return;
+        if (e.key === 'Escape') close();
       });
     })();
   </script>
