@@ -10,6 +10,19 @@ from typing import Optional, List
 from stego.utils.bit_utils import bytes_to_bits
 from stego.utils import encrypt as encrypt_module
 
+# Internal defaults (not intended to be imported by the app)
+_DEFAULT_FRAME_DURATION = 0.1
+_DEFAULT_COMPARE_FRACTION = 0.5
+_DEFAULT_HEADER = "1010101010101010"
+_DEFAULT_FOOTER = "0101010101010101"
+# Safe ranges/guards for the sample-comparison algo
+SAFE_CF_MIN = 0.05   # avoid degenerate 0 or near-0
+SAFE_CF_MAX = 0.95   # avoid compare idx at or past frame end
+MIN_FRAME_SIZE_DEFAULT = 150  # encoder will never go below this
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
 """
 This script embeds a secret message into the audio track of a video file using steganography techniques.
 It extracts the audio from the video, modifies the audio samples to encode the message, and then reintegrates the
@@ -36,7 +49,7 @@ Usage:
 SECRET_MESSAGE = "Message to test"
 
 # Try to find a frame size that can accommodate the required bits, halving if needed.
-def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float, required_bits: int, min_frame_size: int = 150) -> tuple[bool, int, float, int]:
+def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float, required_bits: int, min_frame_size: int = MIN_FRAME_SIZE_DEFAULT) -> tuple[bool, int, float, int]:
     """
     Returns: (ok, chosen_frame_size, chosen_frame_duration_seconds, max_bits)
     Halving logic: start with frame_duration and keep halving until finding a 
@@ -49,6 +62,35 @@ def find_suitable_frame_size(total_samples: int, sr: int, frame_duration: float,
             return True, frame_size, frame_size / sr, max_bits
         frame_size //= 2
     return False, -1, -1.0, 0
+
+def select_frame_size_with_fallback(
+    total_samples: int,
+    sr: int,
+    required_bits: int,
+    requested_frame_duration: float,
+    *,
+    default_frame_duration: float = _DEFAULT_FRAME_DURATION,
+    min_frame_size: int = MIN_FRAME_SIZE_DEFAULT,
+) -> tuple[bool, int, float, int, bool]:
+    """
+    Strategy:
+      - First try the user-requested frame_duration.
+      - If it can't fit the payload, start from the default_frame_duration (0.1s)
+        and keep halving (0.05, 0.025, ...) until it fits or we hit min_frame_size.
+    Returns: (ok, frame_size, frame_duration_sec, max_bits, used_fallback)
+    """
+    # 1) Try the requested frame_duration as-is
+    ok, fs, fd, max_bits = find_suitable_frame_size(
+        total_samples, sr, requested_frame_duration, required_bits, min_frame_size
+    )
+    if ok:
+        return True, fs, fd, max_bits, False
+
+    # 2) Fallback: start at default and halve
+    ok2, fs2, fd2, max_bits2 = find_suitable_frame_size(
+        total_samples, sr, default_frame_duration, required_bits, min_frame_size
+    )
+    return ok2, fs2, fd2, max_bits2, True
 
 # Encode bits into audio data by modifying samples
 def encode_bits_to_audio(data, bits, frame_size, compare_distance):
@@ -107,13 +149,6 @@ def _generate_default_output_path(input_video_path: str, suffix: str = "_output"
         if not os.path.exists(candidate_n):
             return candidate_n
         n += 1
-
-
-# Internal defaults (not intended to be imported by the app)
-_DEFAULT_FRAME_DURATION = 0.1
-_DEFAULT_COMPARE_FRACTION = 0.5
-_DEFAULT_HEADER = "1010101010101010"
-_DEFAULT_FOOTER = "0101010101010101"
 
 @dataclass
 class VideoEncodeOptions:
@@ -183,18 +218,27 @@ def encode_message_in_video_details(
         sr, data = wav.read(audio_wav)
         total_samples = data.shape[0]
 
-        # Capacity check and frame selection (may reduce frame size)
-        min_frame_size = 150
+        # Prepare warnings collected at this level
+        local_warnings: List[str] = []
+
+        # Clamp compare_fraction to safe range
+        cf_used = _clamp(compare_fraction, SAFE_CF_MIN, SAFE_CF_MAX)
+        if abs(cf_used - compare_fraction) > 1e-12:
+            local_warnings.append(f"compare_fraction clamped to {cf_used} (was {compare_fraction}).")
+
+        # Capacity check and frame selection (new fallback strategy)
+        min_frame_size = MIN_FRAME_SIZE_DEFAULT
         need_bits = len(all_bits)
-        ok, frame_size, frame_duration_real, max_bits = find_suitable_frame_size(
+        ok, frame_size, frame_duration_real, max_bits, used_fallback = select_frame_size_with_fallback(
             total_samples=total_samples,
             sr=sr,
-            frame_duration=frame_duration,
             required_bits=need_bits,
+            requested_frame_duration=frame_duration,
+            default_frame_duration=_DEFAULT_FRAME_DURATION,
             min_frame_size=min_frame_size,
         )
 
-        if not ok: # Not enough capacity even with smallest frame size
+        if not ok:  # Not enough capacity even with smallest allowed frame size
             raise ValueError(
                 (
                     "Message is too large for the given video audio. "
@@ -203,7 +247,22 @@ def encode_message_in_video_details(
                 )
             )
 
-        compare_distance = int(frame_size * compare_fraction)
+        # If we had to adjust from the requested duration (or we fell back), warn
+        requested_fs = max(1, int(sr * frame_duration))
+        if used_fallback or frame_size != requested_fs:
+            local_warnings.append(
+                f"Frame duration adjusted from {frame_duration:.8f}s to "
+                f"{frame_duration_real:.8f}s (frame_size={frame_size}) to fit payload."
+            )
+
+        # Compute compare distance safely within [1, frame_size-1]
+        compare_distance = int(frame_size * cf_used)
+        safe_cd = min(max(compare_distance, 1), frame_size - 1)
+        if safe_cd != compare_distance:
+            local_warnings.append(
+                f"compare_distance adjusted to {safe_cd} (from {compare_distance}) for frame_size {frame_size}."
+            )
+        compare_distance = safe_cd
 
         # Embed
         data_encoded = encode_bits_to_audio(data, all_bits, frame_size, compare_distance)
@@ -227,7 +286,7 @@ def encode_message_in_video_details(
         output_path=output_video,
         frame_size=frame_size,
         frame_duration=frame_duration_real,
-        compare_fraction=compare_fraction,
+        compare_fraction=cf_used,
         header=header,
         footer=footer,
         header_display=header_display,
@@ -237,7 +296,7 @@ def encode_message_in_video_details(
         max_bits=max_bits,
         sample_rate=sr,
         total_samples=total_samples,
-        warnings=[],  # none at this level
+        warnings=local_warnings,  # send back any auto-adjust messages
     )
 
 def encode_video_message(
@@ -268,6 +327,12 @@ def encode_video_message(
         if options.compare_fraction is not None:
             try:
                 cf = float(options.compare_fraction)
+                cf_clamped = _clamp(cf, SAFE_CF_MIN, SAFE_CF_MAX)
+                if abs(cf_clamped - cf) > 1e-12:
+                    warnings.append(f"compare_fraction clamped to {cf_clamped} (was {cf}).")
+                cf = cf_clamped
+                # assign after clamping
+                cf = cf_clamped
             except Exception:
                 warnings.append("Invalid compare_fraction; using default.")
         if options.header_bits:
@@ -296,7 +361,7 @@ def encode_video_message(
         header=header,
         footer=footer,
     )
-    # Attach any normalization warnings
+    # Attach normalization warnings
     res.warnings.extend(warnings)
     return res
 

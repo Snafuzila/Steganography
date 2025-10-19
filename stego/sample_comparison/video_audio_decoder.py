@@ -6,6 +6,14 @@ import tempfile
 import subprocess
 import scipy.io.wavfile as wav
 from stego.utils import encrypt as encrypt_module
+from stego.utils.bit_utils import bits_to_text
+
+# Safe ranges consistent with the encoder
+SAFE_CF_MIN = 0.05
+SAFE_CF_MAX = 0.95
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
 
 """
 This script decodes a message hidden in the audio of a video file using steganography techniques.
@@ -47,19 +55,6 @@ Default parameters:
 - footer: 0101010101010101
 """
 
-"""Convert a list of bits to a bytearray."""
-def bits_to_bytes(bits):
-    chars = []
-    for b in range(0, len(bits), 8):
-        byte_bits = bits[b:b+8]
-        if len(byte_bits) < 8:
-            break
-        value = 0
-        for bit in byte_bits:
-            value = (value << 1) | bit
-        chars.append(value)
-    return bytearray(chars)
-
 def find_header_footer(bitstream, header_bits, footer_bits):
     header_len = len(header_bits)
     footer_len = len(footer_bits)
@@ -85,8 +80,10 @@ def decode_audio_stego(
         data_mono = data[:, 0]
     else:
         data_mono = data
-    frame_size = int(sr * frame_duration)
-    compare_distance = int(frame_size * compare_fraction)
+    frame_size = max(2, int(sr * frame_duration))  # ensure at least 2 samples per frame
+    cf_used = _clamp(float(compare_fraction), SAFE_CF_MIN, SAFE_CF_MAX)
+    compare_distance = int(frame_size * cf_used)
+    compare_distance = min(max(compare_distance, 1), frame_size - 1)
     n_frames = len(data_mono) // frame_size
     bits = []
     for i in range(n_frames):
@@ -105,11 +102,7 @@ def decode_audio_stego(
         print("Header or footer not found.")
         return None
     payload_bits = bits[h_start:h_end]
-    message_bytes = bits_to_bytes(payload_bits)
-    try:
-        message = message_bytes.decode()
-    except UnicodeDecodeError:
-        message = message_bytes
+    message = bits_to_text(payload_bits)
     print(f"Decoded message: {message}")
     return message
 

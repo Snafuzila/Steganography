@@ -12,7 +12,7 @@
 
 ## 👥 Team Members
 - Noiman Ron  
-- Kunin Daniel  
+- Konin Daniel  
 - Chayut Dor  
 - Attiya Boaz  
 - Lamay Ofek  
@@ -40,9 +40,9 @@ Build a complete steganographic system that enables **transparent data hiding** 
 
 ### ✅ **Main Goals**
 - Develop dedicated algorithms for **data hiding and extraction**
-- Support the following formats: `PNG`, `BMP`, `WAV`, `AVI`, `MKV`, `MOV`, `TEXT`, `HTML`, `CSS`
+- Support the following formats: `PNG`, `BMP`, `WAV`, `MOV`, `AVI`, `MKV`, `TXT`, `CSS`, `HTML`
 - Build an **internal encryption mechanism (AES-256)** to maintain confidentiality
-- Develop a **user-friendly interface** (initially CLI, potentially GUI later)
+- Develop a **user-friendly interface** (initially CLI, potentially website later)
 - Document all code and algorithms clearly
 - Perform **tests and experiments** using various file types
 
@@ -52,31 +52,33 @@ Build a complete steganographic system that enables **transparent data hiding** 
 
 ### 🐍 **Programming Language**
 - **Python** – Chosen for its strong support in digital file processing, encryption, UI frameworks, and vast library ecosystem.
+- **FFMPEG** – Chosen for its support in video manipulation.
+- **Render** – Chosen as the deployment server.
+- **Docker** – Chosen for its support in deployment.
 
 ### 📚 **Relevant Libraries (selected or under consideration)**
 - `Pillow` – Image file processing  
-- `PyDub`, `wave` – Audio file handling  
-- `PyCryptodome` – Encryption  
-- `PyMuPDF`, `python-docx` – Document (PDF, DOCX) handling  
-- `Tkinter` or `PyQt` – GUI interface (if GUI development is selected)
+
 
 ### 📂 **Supported Formats**
 - **Images:** PNG, BMP  
-- **Audio:** WAV  
+- **Audio:** WAV,   
 - **Video:** AVI, MKV, MOV  
-- **Text/Documents:** TEXT, HTML, CSS  
+- **Text/Documents:** TXT, CSS, HTML
 
 ### 🧠 **Selected Algorithms**
-- **LSB (Least Significant Bit):** For embedding in images (`PNG`, `BMP`) and audio (`WAV`)  
-- **Whitespace Steganography:** For hiding text in `TEXT`, `HTML`, `CSS` documents  
-- **Comparison of Samples (השוואת סימפולים):** For embedding in video (`AVI`, `MKV`, `MOV`)
+- **LSB (Least Significant Bit):** For embedding in images, video, and audio  
+- **Whitespace Steganography:** For hiding text in document formats  
+- **Echo Hiding:** For embedding messages in audio files  
+- **Sample Comparison:** Hiding information in the audio of a video
 
 ---
 
 ## 🔮 Future Implementation Recommendations
-- Share code and logic between handling `WAV` and future support for `FLAC` (Echo Hiding)
+- Share code and logic between handling `WAV` and `FLAC` (Echo Hiding)
 - Explore and evaluate existing Python libraries such as `pydub`, `PyPDF2`, `python-docx`
 - Organize the project using **modular structure** – one class/module per format
 - Create **test cases** to validate that the **original content is not altered**
 
 ---
+
