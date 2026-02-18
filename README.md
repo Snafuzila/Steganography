@@ -1,84 +1,95 @@
-# 🧠 Initial Project Specification Document
+<div align="center">
+
+# StegX
+
+**Advanced Multi-Format Steganography System**
+
+<h3>
+  Holon Institute of Technology (HIT)
+  <br>
+  Semester B - 2025
+</h3>
+
+[![Deploy Status](https://img.shields.io/badge/Deployment-Live-success?style=for-the-badge&logo=render&logoColor=white)](https://steganography-front.onrender.com/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9+-yellow?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+
+<br />
+
+<p align="center">
+  <a href="https://steganography-front.onrender.com/">
+    <img src="Preview.png" alt="StegX Dashboard" width="100%" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+  </a>
+</p>
+
+<h3>
+  <a href="https://steganography-front.onrender.com/">View Live Demo</a>
+  <span> | </span>
+  <a href="#-technical-architecture">Algorithms</a>
+  <span> | </span>
+  <a href="#-team">The Team</a>
+</h3>
+
+</div>
 
 ---
 
-## 📌 Project Name
-**StegX – A Steganography System for Encryption and Information Concealment**
+##  About The Project
 
-## 📚 Course Name
-**Steganography Project – Holon Institute of Technology - 2025, Semester B**
+**StegX** is a comprehensive steganography system developed as a dual-semester project at **HIT**. The goal was to build a tool capable of concealing information inside digital files in a way that is invisible to the naked eye and transparent to the operating system.
 
----
+Unlike simple tools that only support images, StegX implements dedicated algorithms for **Video, Audio, Image, and Text** formats, ensuring the "container" file remains functional and visually unaltered.
 
-## 👥 Team Members
+##  Technical Architecture & Algorithms
+
+This project utilizes distinct algorithms tailored for different media types to ensure maximum concealment and file integrity.
+
+| Media Type | Supported Formats | Algorithm Used |
+| :--- | :--- | :--- |
+| **Images** | `PNG`, `BMP` | **LSB (Least Significant Bit)**<br>Modifies the last bit of pixel bytes to store data without visible color change. |
+| **Audio** | `WAV` | **LSB & Wave Manipulation**<br>Embeds data into the least significant bits of audio samples using the `wave` library. |
+| **Video** | `AVI`, `MKV`, `MOV` | **Frame/Sample Comparison**<br>Utilizes comparison of samples to embed data across video frames while maintaining sync. |
+| **Documents** | `TXT`, `HTML`, `CSS` | **Whitespace Steganography**<br>Hides encrypted payloads using invisible characters and trailing whitespace manipulation. |
+
+### Security
+All hidden messages are first encrypted using **AES-256 (PyCryptodome)** before being embedded. This ensures that even if the steganography is detected, the message remains unreadable without the key.
+
+##  Features
+
+* **Multi-Format Support:** Seamlessly handle Image, Audio, Video, and Web documents.
+* **Zero-Inference:** The output files look and sound identical to the originals.
+* **Web Interface:** A user-friendly GUI built with Flask (Python) and hosted on Render.
+* **Data Extraction:** Reliable decryption and extraction of hidden messages with password protection.
+
+##  Tech Stack
+
+* **Language:** Python 3.11
+* **Web Framework:** Flask
+* **Core Libraries:**
+    * `Pillow` (Image Processing)
+    * `PyCryptodome` (AES-256 Encryption)
+    * `wave` (Audio Processing)
+    * `FFmpeg` / `OpenCV` (Video Processing)
+
+##  Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone [https://github.com/Snafuzila/Steganography.git](https://github.com/Snafuzila/Steganography.git)
+   cd Steganography
+
+2. Run the applicationBashpython app.py and open localhost:8000
+
+##  Team Members
 - Noiman Ron  
-- Konin Daniel  
+- Kunin Daniel  
 - Chayut Dor  
 - Attiya Boaz  
 - Lamay Ofek  
+**Instructor Zimon Roi**
 
-## 👨‍🏫 Instructor
-**Zimon Roi**
-
----
-
-## 1. 🧾 General Background
-
-The need for privacy, confidentiality, and secure information transmission has become more prevalent in the digital age.  
-This project involves developing a system that implements **steganography principles** — concealing information inside digital files in a way that is invisible to the eye.
-
-The system will allow users to **embed files or text** into various formats such as images, audio files, videos, and documents — using dedicated hiding algorithms, **without visibly altering the file**.
-
-Additionally, the project includes developing a **user-friendly interface** and the ability to **extract hidden information**, with **optional encryption** and basic content protection.
-
----
-
-## 2. 🎯 Objectives and Goals
-
-### 🎯 **Project Objective**
-Build a complete steganographic system that enables **transparent data hiding** (text, files) in various formats, while **preserving the integrity** of the outer file.
-
-### ✅ **Main Goals**
-- Develop dedicated algorithms for **data hiding and extraction**
-- Support the following formats: `PNG`, `BMP`, `WAV`, `MOV`, `AVI`, `MKV`, `TXT`, `CSS`, `HTML`
-- Build an **internal encryption mechanism (AES-256)** to maintain confidentiality
-- Develop a **user-friendly interface** (initially CLI, potentially website later)
-- Document all code and algorithms clearly
-- Perform **tests and experiments** using various file types
-
----
-
-## 3. 🧪 Technological Overview
-
-### 🐍 **Programming Language**
-- **Python** – Chosen for its strong support in digital file processing, encryption, UI frameworks, and vast library ecosystem.
-- **FFMPEG** – Chosen for its support in video manipulation.
-- **Render** – Chosen as the deployment server.
-- **Docker** – Chosen for its support in deployment.
-
-### 📚 **Relevant Libraries (selected or under consideration)**
-- `Pillow` – Image file processing  
-
-
-### 📂 **Supported Formats**
-- **Images:** PNG, BMP  
-- **Audio:** WAV,   
-- **Video:** AVI, MKV, MOV  
-- **Text/Documents:** TXT, CSS, HTML
-
-### 🧠 **Selected Algorithms**
-- **LSB (Least Significant Bit):** For embedding in images, video, and audio  
-- **Whitespace Steganography:** For hiding text in document formats  
-- **Echo Hiding:** For embedding messages in audio files  
-- **Sample Comparison:** Hiding information in the audio of a video
-
----
-
-## 🔮 Future Implementation Recommendations
-- Share code and logic between handling `WAV` and `FLAC` (Echo Hiding)
-- Explore and evaluate existing Python libraries such as `pydub`, `PyPDF2`, `python-docx`
-- Organize the project using **modular structure** – one class/module per format
-- Create **test cases** to validate that the **original content is not altered**
-
----
-
+<div align="center">
+<sub>
+Built with ❤️ by the StegX Team @ HIT 2025
+</sub>
+</div>
