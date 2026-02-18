@@ -25,9 +25,9 @@
 <h3>
   <a href="https://steganography-front.onrender.com/">View Live Demo</a>
   <span> | </span>
-  <a href="#-technical-architecture">Algorithms</a>
+  <a href="#technical-architecture--algorithms">Algorithms</a>
   <span> | </span>
-  <a href="#-team">The Team</a>
+  <a href="#team-members">The Team</a>
 </h3>
 
 </div>
