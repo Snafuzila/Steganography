@@ -78,7 +78,7 @@ All hidden messages are first encrypted using **AES-256 (PyCryptodome)** before 
    git clone [https://github.com/Snafuzila/Steganography.git](https://github.com/Snafuzila/Steganography.git)
    cd Steganography
 
-2. Run the applicationBashpython app.py and open localhost:8000
+2. Run the application app.py and open [localhost:8000](http://localhost:8000)
 
 ##  Team Members
 - Noiman Ron  
@@ -86,7 +86,7 @@ All hidden messages are first encrypted using **AES-256 (PyCryptodome)** before 
 - Chayut Dor  
 - Attiya Boaz  
 - Lamay Ofek  
-**Instructor Zimon Roi**
+**- Instructor Zimon Roi**
 
 <div align="center">
 <sub>
