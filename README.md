@@ -81,12 +81,13 @@ All hidden messages are first encrypted using **AES-256 (PyCryptodome)** before 
 2. Run the application app.py and open [localhost:8000](http://localhost:8000)
 
 ##  Team Members
-- Noiman Ron  
-- Kunin Daniel  
-- Chayut Dor  
-- Attiya Boaz  
-- Lamay Ofek  
 **- Instructor Zimon Roi**
+- Attiya Boaz 
+- Chayut Dor  
+- Kunin Daniel  
+- Lamay Ofek
+- Noiman Ron  
+
 
 <div align="center">
 <sub>
