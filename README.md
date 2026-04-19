@@ -7,7 +7,7 @@
 <h3>
   Holon Institute of Technology (HIT)
   <br>
-  Semester B - 2025
+  2025
 </h3>
 
 [![Deploy Status](https://img.shields.io/badge/Deployment-Live-success?style=for-the-badge&logo=render&logoColor=white)](https://steganography-front.onrender.com/)
